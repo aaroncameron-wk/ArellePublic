@@ -19,8 +19,8 @@ jobs:
           curl -L ${{ secrets.XBRL_VALIDATION_CONFIG_URL }} -o xbrl_validation_config.zip
           unzip -q xbrl_validation_config.zip
           mkdir -p ~/Library/Caches/Arelle
-          mv ./xbrl_validation_config/http ~/Library/Caches/Arelle
-          mv ./xbrl_validation_config/https ~/Library/Caches/Arelle
+          mv http ~/Library/Caches/Arelle
+          mv https ~/Library/Caches/Arelle
       - uses: actions/checkout@v3
       - name: Install Python 3
         uses: actions/setup-python@v3
