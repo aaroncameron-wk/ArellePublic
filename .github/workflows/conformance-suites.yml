@@ -14,8 +14,9 @@ jobs:
           - tests/integration_tests/validation/ESEF/test_esef_xhtml_conformance_suite.py
           - tests/integration_tests/validation/test_utr_conformance_suite.py
     steps:
-      - run: |
-          curl http://k.wk-dev.wdesk.org/s/taxonomy-service/xbrl_validation_config/ 
+      - name: Download XBRL validation config
+        run: |
+          curl -L ${{ secrets.XBRL_VALIDATION_CONFIG_URL }} -o xbrl_validation_config.zip
           unzip xbrl_validation_config.zip
           mkdir ~/Library/Caches/Arelle
           mv ./xbrl_validation_config/http ~/Library/Caches/Arelle
