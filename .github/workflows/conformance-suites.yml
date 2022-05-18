@@ -17,8 +17,8 @@ jobs:
       - name: Download XBRL validation config
         run: |
           curl -L ${{ secrets.XBRL_VALIDATION_CONFIG_URL }} -o xbrl_validation_config.zip
-          unzip xbrl_validation_config.zip
-          mkdir ~/Library/Caches/Arelle
+          unzip -q xbrl_validation_config.zip
+          mkdir -p ~/Library/Caches/Arelle
           mv ./xbrl_validation_config/http ~/Library/Caches/Arelle
           mv ./xbrl_validation_config/https ~/Library/Caches/Arelle
       - uses: actions/checkout@v3
