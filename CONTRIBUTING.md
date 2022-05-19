@@ -1,11 +1,11 @@
 <div align="center">
   <img src="http://arelle.org/arelle/wp-content/themes/platform/images/logo-platform.png">
-</div> 
+</div>
 
 # Contributing guidelines
 
 ## Reporting issues
-
+ 
 Please report issues to the [issue tracker](https://github.com/arelle/arelle/issues).
 
 * Check that the issue has not already been reported.
