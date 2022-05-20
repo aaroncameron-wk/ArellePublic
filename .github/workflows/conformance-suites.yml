@@ -16,9 +16,11 @@ jobs:
     environment: integration-tests
     steps:
       - name: Download XBRL validation config
+        env:
+          XBRL_VALIDATION_CONFIG_URL: ${{ secrets.XBRL_VALIDATION_CONFIG_URL }}
         run: |
           mkdir -p "$XDG_CONFIG_HOME/arelle/cache"
-          curl -L "${{ secrets.XBRL_VALIDATION_CONFIG_URL }}" -o config.zip 
+          curl -L "$XBRL_VALIDATION_CONFIG_URL" -o config.zip
           unzip -d "$XDG_CONFIG_HOME/arelle/cache" config.zip 'http/*' 'https/*'
           rm config.zip
       - uses: actions/checkout@v3
