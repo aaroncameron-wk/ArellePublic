@@ -2,7 +2,7 @@
   <img src="http://arelle.org/arelle/wp-content/themes/platform/images/logo-platform.png">
 </div> 
 
-# Contributing guidelines
+# Contributing guidelines 
 
 ## Reporting issues
 
