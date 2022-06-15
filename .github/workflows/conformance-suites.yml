@@ -59,11 +59,13 @@ jobs:
           CONFORMANCE_SUITES_TEST_MODE: OFFLINE
         run: pytest --disable-warnings ${{ matrix.test-path }}
       - name: Upload log artifact
+        if: failure()
         uses: actions/upload-artifact@master
         with:
           name: conf-log.txt
           path: conf-log.txt
       - name: Upload log report
+        if: failure()
         uses: actions/upload-artifact@master
         with:
           name: conf-report.csv
