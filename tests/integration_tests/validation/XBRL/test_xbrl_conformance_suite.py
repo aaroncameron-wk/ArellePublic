@@ -10,7 +10,9 @@ ARGS = [
     '--keepOpen',
     '--testcaseResultsCaptureWarnings',
     '--calcPrecision',
-    '--validate'
+    '--validate',
+    '--csvTestReport', './conf-report.csv',
+    '--logFile', './conf-log.txt',
 ]
 
 if os.getenv('CONFORMANCE_SUITES_TEST_MODE') == 'OFFLINE':
