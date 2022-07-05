@@ -1,0 +1,77 @@
+name: Build installable mac distributions
+on: workflow_dispatch
+
+jobs:
+  build-distribution:
+    environment: release
+    strategy:
+      matrix:
+        os: [ macos-10.15, macos-11, macos-12 ]
+        runner: [
+          {
+            name: arelleCmdLine,
+            executor: arelleCmdLine.py
+          },
+          {
+            name: arelleGUI,
+            executor: arelleGUI.pyw
+          }
+        ]
+
+    permissions:
+      contents: write
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install Python 3
+        uses: actions/setup-python@v3
+        with:
+          python-version: 3.9
+      - run: pip install -r requirements.txt
+      - run: pip install pyinstaller
+      - name: Rebuild messages.pot internationalization file
+        run: python pygettext.py -v -o arelle/locale/messages.pot arelle/*.pyw arelle/*.py
+      - name: Regenerate messages catalog (doc/messagesCatalog.xml)
+        run: python generateMessagesCatalog.py
+      - uses: actions/checkout@v3
+        with:
+          repository: Arelle/EdgarRenderer
+          path: arelle/plugin/EdgarRenderer
+      - run: rm -rf arelle/plugin/EdgarRenderer/.git
+      - uses: actions/checkout@v3
+        with:
+          repository: xbrlus/xule
+          path: tmp
+      - run: |
+          mv tmp/plugin/validate/* arelle/plugin/validate/
+          rm -rf tmp/plugin/validate
+          mv tmp/plugin/* arelle/plugin/
+          rm -rf tmp
+      - uses: actions/checkout@v3
+        with:
+          repository: Workiva/ixbrl-viewer
+          path: tmp/ixbrl-viewer
+      - uses: actions/setup-node@v3
+        with:
+          node-version: 14.x
+      - run: |
+          cd tmp/ixbrl-viewer
+          npm install
+          npm run prod
+          cd ../..
+          mv tmp/ixbrl-viewer/iXBRLViewerPlugin arelle/plugin/
+          rm -rf tmp
+      - name: Find TCL/TK
+        run: |
+          python -c 'import tkinter; root = tkinter.Tk(); print("\n".join(root.tk.exprstring(f"${s}_library") for s in ("tcl", "tk")))'
+      - name: Retrieve site packages
+        run: |
+          echo "::set-output name=IMPORTS::$(pip freeze | sed 's/^/--hidden-import /;' | cut -f1 -d"=" | tr '\n' ' ')"
+        id: packages
+      - run: pyinstaller ${{  steps.packages.outputs.IMPORTS }} -w -n ${{ matrix.runner.name }}-${{ matrix.os }} --add-data arelle:arelle -i arelle/images/arelle.icns ${{ matrix.runner.executor }} --add-data=/System/Library/Frameworks/Tcl.framework/Versions/8.5:tcl --add-data=/System/Library/Frameworks/Tk.framework/Versions/8.5:tk --add-data libs/macos/Tktable2.11:Tktable2.11
+      - run: hdiutil create -fs HFS+ -srcfolder "dist/${{ matrix.runner.name }}-${{ matrix.os }}.app" -volname "${{ matrix.runner.name }}-${{ matrix.os }}" "${{ matrix.runner.name }}-${{ matrix.os }}.dmg"
+      - uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.runner.name }}-${{ matrix.os }}
+          path: ${{ matrix.runner.name }}-${{ matrix.os }}.dmg
