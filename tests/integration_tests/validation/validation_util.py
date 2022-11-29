@@ -1,12 +1,15 @@
 from __future__ import annotations
-from collections import Counter
 import os.path
-from pathlib import PurePath
-
 import pytest
+from collections import Counter
+from pathlib import PurePath
+from unittest.mock import patch
 
-from arelle.CntlrCmdLine import parseAndRun
 from arelle import ModelDocument, PackageManager, PluginManager
+from arelle.CntlrCmdLine import parseAndRun
+from arelle.WebCache import WebCache
+
+from tests.integration_tests.validation.conformance_suite_config import ConformanceSuiteConfig
 
 
 def get_test_data(args, expected_failure_ids=frozenset(), expected_empty_testcases=frozenset()):
@@ -70,11 +73,48 @@ def get_test_data(args, expected_failure_ids=frozenset(), expected_empty_testcas
         nonunique_test_ids = {test_id: count for test_id, count in test_id_frequencies.items() if count > 1}
         if nonunique_test_ids:
             raise Exception(f'Some test IDs are not unique.  Frequencies of nonunique test IDs: {nonunique_test_ids}.')
-        nonexistent_expected_failure_ids = expected_failure_ids - set(test_id_frequencies)
-        if nonexistent_expected_failure_ids:
-            raise Exception(f"Some expected failure IDs don't match any test cases: {sorted(nonexistent_expected_failure_ids)}.")
+        if expected_failure_ids:
+            nonexistent_expected_failure_ids = expected_failure_ids - set(test_id_frequencies)
+            if nonexistent_expected_failure_ids:
+                raise Exception(f"Some expected failure IDs don't match any test cases: {sorted(nonexistent_expected_failure_ids)}.")
         return results
     finally:
         cntlr.modelManager.close()
         PackageManager.close()
         PluginManager.close()
+
+
+original_normalize_url_function = WebCache.normalizeUrl
+
+
+def normalize_url_function(config: ConformanceSuiteConfig):
+    def normalize_url(self, url, base=None):
+        if config.url_replace:
+            if url.startswith(config.url_replace):
+                return url.replace(config.url_replace, f'{config.local_filepath}/')
+        return original_normalize_url_function(self, url, base)
+    return normalize_url
+
+
+def get_conformance_suite_test_results(config: ConformanceSuiteConfig, log_to_file: bool = False, offline: bool = False):
+    base_args = [
+        '--keepOpen',
+        '--testcaseResultsCaptureWarnings',
+        '--validate',
+    ]
+    if offline:
+        base_args.extend(['--internetConnectivity', 'offline'])
+    with patch('arelle.WebCache.WebCache.normalizeUrl', normalize_url_function(config)):
+        args = [
+            '--file', os.path.abspath(os.path.join(config.local_filepath, config.file)),
+        ]
+        if log_to_file:
+            args.extend([
+                '--csvTestReport', f'conf-{config.name}-report.csv',
+                '--logFile', f'conf-{config.name}-log.txt',
+            ])
+        return get_test_data(
+            args + [*base_args] + [*config.args],
+            expected_failure_ids=config.expected_failure_ids,
+            expected_empty_testcases=config.expected_empty_testcases,
+        )
