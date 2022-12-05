@@ -11,6 +11,7 @@ from tests.integration_tests.validation.download_conformance_suites import (
     download_conformance_suite, extract_conformance_suite
 )
 
+
 ARGUMENTS = [
     {
         "name": "--all",
