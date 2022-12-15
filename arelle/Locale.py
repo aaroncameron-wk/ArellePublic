@@ -286,6 +286,16 @@ def languageCodes() -> dict[str, str]:  # dynamically initialize after gettext i
         }
         return _languageCodes
 
+
+def setApplicationLocale() -> None:
+    """
+    Sets the locale to C, to be used in application contexts
+    :return:
+    """
+    import locale
+    locale.setlocale(locale.LC_ALL, 'C')
+
+
 _disableRTL: bool = False # disable for implementations where tkinter supports rtl
 def setDisableRTL(disableRTL: bool) -> None:
     global _disableRTL
