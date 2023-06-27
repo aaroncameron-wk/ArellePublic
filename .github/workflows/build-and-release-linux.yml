@@ -60,10 +60,14 @@ on:
         required: false
         type: string
 
+permissions: {}
+
 jobs:
   build-linux:
     environment: release
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write
     steps:
       - name: Checkout arelle
         uses: actions/checkout@v3.5.3

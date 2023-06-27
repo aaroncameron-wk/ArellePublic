@@ -4,6 +4,8 @@ on:
   release:
     types: [released]
 
+permissions: {}
+
 jobs:
   python-package:
     uses: ./.github/workflows/python-package.yml

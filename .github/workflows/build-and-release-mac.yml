@@ -50,11 +50,14 @@ on:
         required: false
         type: string
 
+permissions: {}
+
 jobs:
   build-mac:
     environment: release
     runs-on: macos-12
-
+    permissions:
+      contents: write
     steps:
       - name: Checkout arelle
         uses: actions/checkout@v3.5.3

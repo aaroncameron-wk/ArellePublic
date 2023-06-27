@@ -4,6 +4,8 @@ on:
   workflow_call:
   workflow_dispatch:
 
+permissions: {}
+
 jobs:
   build:
     uses: ./.github/workflows/build-windows.yml
@@ -11,6 +13,8 @@ jobs:
   release:
     needs: build
     environment: release
+    permissions:
+      contents: write
     runs-on: ubuntu-22.04
     steps:
       - name: Download installer artifact
