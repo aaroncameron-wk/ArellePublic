@@ -60,8 +60,14 @@ jobs:
     steps:
       - name: Install twine
         run: pip install -U twine
-      - name: Download artifacts
+      - name: Download tar artifact
         uses: actions/download-artifact@v3.0.2
+        with:
+          name: arelle.tar.gz
+      - name: Download wheel artifact
+        uses: actions/download-artifact@v3.0.2
+        with:
+          name: arelle.whl
       - name: Publish package on release
         env:
           TWINE_USERNAME: ${{ secrets.TWINE_USERNAME }}
