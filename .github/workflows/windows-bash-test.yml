@@ -1,0 +1,14 @@
+name: Windows test
+on: workflow_dispatch
+
+jobs:
+  build-windows-dispatch:
+    runs-on: windows-2022
+    steps:
+      - name: Test bash
+        run: |
+          if aws s3api head-object --bucket ryft-public-sample-data --key invalid.zip; then
+            aws s3api get-object --bucket ryft-public-sample-data --key invalid.zip config.zip
+          else
+            curl -L "https://www.google.com/" -o config.zip
+          fi
