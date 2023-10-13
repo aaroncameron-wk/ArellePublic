@@ -6,6 +6,7 @@ jobs:
     runs-on: windows-2022
     steps:
       - name: Test bash
+        shell: bash
         run: |
           if aws s3api head-object --bucket ryft-public-sample-data --key invalid.zip; then
             aws s3api get-object --bucket ryft-public-sample-data --key invalid.zip config.zip
