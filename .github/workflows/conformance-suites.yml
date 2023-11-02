@@ -19,12 +19,8 @@ jobs:
     outputs:
       matrix: ${{ steps.build-test-matrix.outputs.matrix }}
     steps:
-      - name: Mergeability log
-        run: |
-          echo ${{ github.event.pull_request.mergeable }}
-          echo ${{ github.event.pull_request.merge_commit_sha }}
       - name: Mergeability check
-        if: ${{ !github.event.pull_request.mergeable }}
+        if: ${{ !github.event.pull_request.merge_commit_sha }}
         run: exit 1
       - uses: actions/checkout@v4.1.1
         with:
