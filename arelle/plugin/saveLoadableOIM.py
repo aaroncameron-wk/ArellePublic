@@ -97,6 +97,7 @@ def saveLoadableOIM(modelXbrl, oimFile, outputZip=None,
         qnOimPeriodAspect}
 
     def oimValue(object, decimals=None):
+        # merge conflict
         if isinstance(object, QName):
             if object.namespaceURI not in namespacePrefixes:
                 if object.prefix:
