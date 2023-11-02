@@ -19,6 +19,13 @@ jobs:
     outputs:
       matrix: ${{ steps.build-test-matrix.outputs.matrix }}
     steps:
+      - name: Mergeability log
+        run: |
+          echo github.event.pull_request.head.sha: ${{ github.event.pull_request.head.sha }}
+          echo github.event.pull_request.merge_commit_sha: ${{ github.event.pull_request.merge_commit_sha }}
+          echo github.event.pull_request.mergeable: ${{ github.event.pull_request.mergeable }}
+          echo github.event.pull_request.mergeable_status: ${{ github.event.pull_request.mergeable_status }}
+          echo Mergeability check: ${{ github.event.pull_request.head.sha && !github.event.pull_request.merge_commit_sha }}
       - name: Mergeability check
         # If this is running on a PR (not workflow_dispatch) and a test merge commit does not exist, fail.
         # This ensures that a PR won't run this workflow without the merge commit available.
