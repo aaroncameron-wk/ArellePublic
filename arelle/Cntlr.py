@@ -441,6 +441,7 @@ class Cntlr:
         """
         pass
 
+
     def close(self, saveConfig: bool = False) -> None:
         """Closes the controller and its logger, optionally saving the user preferences configuration
 
