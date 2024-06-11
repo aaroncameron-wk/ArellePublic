@@ -9,6 +9,7 @@ from arelle import ValidateDuplicateFacts
 import os, sys, subprocess, pickle, time, locale, fnmatch, platform, webbrowser
 import regex as re
 
+from arelle.inline import InlineUi
 from arelle.logging.formatters.LogFormatter import logRefsFileLines
 
 if sys.platform == 'win32' and getattr(sys, 'frozen', False):
@@ -122,6 +123,8 @@ class CntlrWinMain (Cntlr.Cntlr):
                 (_("Import File..."), self.importFileOpen, None, None),
                 (_("Import Web..."), self.importWebOpen, None, None),
                 (_("Reopen"), self.fileReopen, None, None),
+                (_("Open File Inline Doc Set"), self.openInlineFile, None, None),
+                (_("Open Web Inline Doc Set"), self.openInlineWeb, None, None),
                 ("PLUG-IN", "CntlrWinMain.Menu.File.Open", None, None),
                 (_("Save"), self.fileSaveExistingFile, "Ctrl+S", "<Control-s>"),
                 (_("Save As..."), self.fileSave, None, None),
@@ -261,6 +264,7 @@ class CntlrWinMain (Cntlr.Cntlr):
 
         toolsMenu.add_command(label=_("Language..."), underline=0, command=lambda: DialogLanguage.askLanguage(self))
 
+        InlineUi.saveTargetDocumentMenuEntender(self, toolsMenu)
         for pluginMenuExtender in pluginClassMethods("CntlrWinMain.Menu.Tools"):
             pluginMenuExtender(self, toolsMenu)
         self.menubar.add_cascade(label=_("Tools"), menu=toolsMenu, underline=0)
@@ -1061,6 +1065,12 @@ class CntlrWinMain (Cntlr.Cntlr):
         fileHistory = self.config.setdefault("fileHistory", [])
         if len(fileHistory) > 0:
             self.fileOpenFile(fileHistory[0])
+
+    def openInlineFile(self):
+        InlineUi.runOpenFileInlineDocumentSetMenuCommand(self, runInBackground=True)
+
+    def openInlineWeb(self):
+        InlineUi.runOpenWebInlineDocumentSetMenuCommand(self, runInBackground=True)
 
     def validate(self):
         modelXbrl = self.modelManager.modelXbrl
