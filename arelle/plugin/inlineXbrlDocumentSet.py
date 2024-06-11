@@ -82,6 +82,7 @@ from arelle import FileSource, ModelXbrl, ValidateXbrlDimensions, XbrlConst, Val
 from arelle.RuntimeOptions import RuntimeOptions
 from arelle.ValidateDuplicateFacts import DeduplicationType
 from arelle.inline.ModelInlineXbrlDocumentSet import ModelInlineXbrlDocumentSet
+from arelle.inline.TargetChoiceDialog import TargetChoiceDialog
 
 DialogURL = None # dynamically imported when first used
 from arelle.CntlrCmdLine import filesourceEntrypointFiles
