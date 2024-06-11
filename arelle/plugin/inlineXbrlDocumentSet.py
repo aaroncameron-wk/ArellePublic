@@ -81,6 +81,7 @@ from __future__ import annotations
 from arelle import FileSource, ModelXbrl, ValidateXbrlDimensions, XbrlConst, ValidateDuplicateFacts
 from arelle.RuntimeOptions import RuntimeOptions
 from arelle.ValidateDuplicateFacts import DeduplicationType
+from arelle.inline import DEFAULT_TARGET, IXDS_SURROGATE, IXDS_DOC_SEPARATOR, MINIMUM_IXDS_DOC_COUNT
 from arelle.inline.ModelInlineXbrlDocumentSet import ModelInlineXbrlDocumentSet
 from arelle.inline.TargetChoiceDialog import TargetChoiceDialog
 
@@ -105,11 +106,6 @@ from optparse import SUPPRESS_HELP
 from lxml.etree import XML, XMLSyntaxError
 from collections import defaultdict
 
-DEFAULT_TARGET = "(default)"
-IXDS_SURROGATE = "_IXDS#?#" # surrogate (fake) file name for inline XBRL doc set (IXDS)
-IXDS_DOC_SEPARATOR = "#?#" # the files of the document set follow the above "surrogate" with these separators
-
-MINIMUM_IXDS_DOC_COUNT = 2 # make this 2 to cause single-documents to be processed without a document set object
 
 skipExpectedInstanceComparison = None
 
