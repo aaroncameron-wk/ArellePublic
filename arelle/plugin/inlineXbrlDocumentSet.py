@@ -172,25 +172,6 @@ def runOpenInlineDocumentSetMenuCommand(cntlr, filenames, runInBackground=False,
         cntlr.fileOpenFile(filename)
 
 
-def ixdsTargetDiscoveryCompleted(modelXbrl, modelIxdsDocument):
-    targetIXDSesToLoad = getattr(modelXbrl, "targetIXDSesToLoad", False)
-    if targetIXDSesToLoad:
-        # load and discover additional targets
-        modelXbrl.supplementalModelXbrls = []
-        for targets, ixdsHtmlElements in targetIXDSesToLoad:
-            for target in targets:
-                modelXbrl.supplementalModelXbrls.append(
-                    ModelXbrl.load(modelXbrl.modelManager, ixdsHtmlElements[0].modelDocument.uri,
-                                   f"loading secondary target {target} {ixdsHtmlElements[0].modelDocument.uri}",
-                                   useFileSource=modelXbrl.fileSource, ixdsTarget=target, ixdsHtmlElements=ixdsHtmlElements)
-                )
-        modelXbrl.modelManager.loadedModelXbrls.extend(modelXbrl.supplementalModelXbrls)
-    # provide schema references for IXDS document
-    modelIxdsDocument.targetDocumentSchemaRefs = set()  # union all the instance schemaRefs
-    for referencedDoc in modelIxdsDocument.referencesDocument.keys():
-        if referencedDoc.type == Type.SCHEMA:
-            modelIxdsDocument.targetDocumentSchemaRefs.add(modelIxdsDocument.relativeUri(referencedDoc.uri))
-
 __pluginInfo__ = {
     'name': 'Inline XBRL Document Set',
     'version': '1.1',
@@ -203,5 +184,4 @@ __pluginInfo__ = {
     # classes of mount points (required)
     'CntlrWinMain.Menu.File.Open': fileOpenMenuEntender,
     'CntlrWinMain.Menu.Tools': saveTargetDocumentMenuEntender,
-    'ModelDocument.IxdsTargetDiscovered': ixdsTargetDiscoveryCompleted,
 }

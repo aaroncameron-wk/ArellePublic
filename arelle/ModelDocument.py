@@ -8,7 +8,7 @@ from typing import Any
 from lxml import etree
 from xml.sax import SAXParseException
 from arelle import (PackageManager, XbrlConst, XmlUtil, UrlUtil, ValidateFilingText,
-                    XhtmlValidate, XmlValidateSchema, FunctionIxt, inline)
+                    XhtmlValidate, XmlValidateSchema, FunctionIxt)
 from arelle.FileSource import FileSource
 from arelle.ModelObject import ModelObject
 from arelle.ModelValue import qname
@@ -2153,6 +2153,7 @@ def inlineIxdsDiscover(modelXbrl, modelIxdsDocument, setTargetModelXbrl=False):
         modelIxdsDocument.targetXbrlRootElement = modelXbrl.ixTargetRootElements[ixdsTarget]
         modelIxdsDocument.targetXbrlElementTree = PrototypeElementTree(modelIxdsDocument.targetXbrlRootElement)
 
+    InlineLoader.targetDiscoveryCompleted(modelXbrl, modelIxdsDocument)
     for pluginMethod in pluginClassMethods("ModelDocument.IxdsTargetDiscovered"):
         pluginMethod(modelXbrl, modelIxdsDocument)
 

@@ -3,7 +3,7 @@ See COPYRIGHT.md for copyright information.
 """
 import os
 
-from arelle import ModelDocument
+from arelle import ModelDocument, ModelXbrl
 from arelle.ModelDocument import Type, ModelDocumentReference, inlineIxdsDiscover
 from arelle.PluginManager import pluginClassMethods
 from arelle.UrlUtil import isHttpUrl
@@ -159,3 +159,23 @@ def selectTargetDocument(modelXbrl, modelIxdsDocument):
     for htmlElt in modelXbrl.ixdsHtmlElements:
         for inlineElement in htmlElt.iterdescendants(tag=htmlElt.modelDocument.ixNStag + "resources"):
             xmlValidate(modelXbrl, inlineElement) # validate instance elements
+
+
+def targetDiscoveryCompleted(modelXbrl, modelIxdsDocument):
+    targetIXDSesToLoad = getattr(modelXbrl, "targetIXDSesToLoad", [])
+    if targetIXDSesToLoad:
+        # load and discover additional targets
+        modelXbrl.supplementalModelXbrls = []
+        for targets, ixdsHtmlElements in targetIXDSesToLoad:
+            for target in targets:
+                modelXbrl.supplementalModelXbrls.append(
+                    ModelXbrl.load(modelXbrl.modelManager, ixdsHtmlElements[0].modelDocument.uri,
+                                   f"loading secondary target {target} {ixdsHtmlElements[0].modelDocument.uri}",
+                                   useFileSource=modelXbrl.fileSource, ixdsTarget=target, ixdsHtmlElements=ixdsHtmlElements)
+                )
+        modelXbrl.modelManager.loadedModelXbrls.extend(modelXbrl.supplementalModelXbrls)
+    # provide schema references for IXDS document
+    modelIxdsDocument.targetDocumentSchemaRefs = set()  # union all the instance schemaRefs
+    for referencedDoc in modelIxdsDocument.referencesDocument.keys():
+        if referencedDoc.type == Type.SCHEMA:
+            modelIxdsDocument.targetDocumentSchemaRefs.add(modelIxdsDocument.relativeUri(referencedDoc.uri))
