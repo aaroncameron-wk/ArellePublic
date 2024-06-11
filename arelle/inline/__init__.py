@@ -2,12 +2,25 @@
 See COPYRIGHT.md for copyright information.
 """
 import os
+import zipfile
 from collections import defaultdict
 from optparse import SUPPRESS_HELP
 from typing import Type
 
-from arelle import ValidateDuplicateFacts, FileSource
+from lxml.etree import XML, XMLSyntaxError
+
+from arelle import ValidateDuplicateFacts, FileSource, ModelXbrl, ValidateXbrlDimensions, XbrlConst
+from arelle.ModelInstanceObject import ModelInlineFootnote
 from arelle.ModelObject import ModelObject
+from arelle.ModelValue import INVALIDixVALUE, qname
+from arelle.PluginManager import pluginClassMethods
+from arelle.PrototypeDtsObject import LocPrototype, ArcPrototype
+from arelle.UrlUtil import isHttpUrl
+from arelle.ValidateDuplicateFacts import DeduplicationType
+from arelle.ValidateFilingText import CDATApattern
+from arelle.XmlUtil import xmlnsprefix, addChild, setXmlns, elementFragmentIdentifier, copyIxFootnoteHtml
+from arelle.XmlValidate import VALID, NONE
+
 
 DEFAULT_TARGET = "(default)"
 IXDS_SURROGATE = "_IXDS#?#"  # surrogate (fake) file name for inline XBRL doc set (IXDS)
@@ -15,6 +28,241 @@ IXDS_DOC_SEPARATOR = "#?#"  # the files of the document set follow the above "su
 MINIMUM_IXDS_DOC_COUNT = 2  # make this 2 to cause single-documents to be processed without a document set object
 
 _skipExpectedInstanceComparison = None
+
+
+# baseXmlLang: set on root xbrli:xbrl element
+# defaultXmlLang: if a fact/footnote has a different lang, provide xml:lang on it.
+def createTargetInstance(
+        modelXbrl,
+        targetUrl,
+        targetDocumentSchemaRefs,
+        filingFiles,
+        baseXmlLang=None,
+        defaultXmlLang=None,
+        skipInvalid=False,
+        xbrliNamespacePrefix=None,
+        deduplicationType: ValidateDuplicateFacts.DeduplicationType | None = None):
+    def addLocallyReferencedFile(elt,filingFiles):
+        if elt.tag in ("a", "img"):
+            for attrTag, attrValue in elt.items():
+                if attrTag in ("href", "src") and not isHttpUrl(attrValue) and not os.path.isabs(attrValue):
+                    attrValue = attrValue.partition('#')[0] # remove anchor
+                    if attrValue: # ignore anchor references to base document
+                        attrValue = os.path.normpath(attrValue) # change url path separators to host separators
+                        file = os.path.join(sourceDir,attrValue)
+                        if modelXbrl.fileSource.isInArchive(file, checkExistence=True) or os.path.exists(file):
+                            filingFiles.add(file)
+    targetInstance = ModelXbrl.create(modelXbrl.modelManager,
+                                      newDocumentType=Type.INSTANCE,
+                                      url=targetUrl,
+                                      schemaRefs=targetDocumentSchemaRefs,
+                                      isEntry=True,
+                                      discover=False,  # don't attempt to load DTS
+                                      xbrliNamespacePrefix=xbrliNamespacePrefix)
+    ixTargetRootElt = modelXbrl.ixTargetRootElements[getattr(modelXbrl, "ixdsTarget", None)]
+    langIsSet = False
+    # copy ix resources target root attributes
+    for attrName, attrValue in ixTargetRootElt.items():
+        if attrName != "target": # ix:references target is not mapped to xbrli:xbrl
+            targetInstance.modelDocument.xmlRootElement.set(attrName, attrValue)
+        if attrName == "{http://www.w3.org/XML/1998/namespace}lang":
+            langIsSet = True
+            defaultXmlLang = attrValue
+        if attrName.startswith("{"):
+            ns, _sep, ln = attrName[1:].rpartition("}")
+            if ns:
+                prefix = xmlnsprefix(ixTargetRootElt, ns)
+                if prefix not in (None, "xml"):
+                    setXmlns(targetInstance.modelDocument, prefix, ns)
+
+    if not langIsSet and baseXmlLang:
+        targetInstance.modelDocument.xmlRootElement.set("{http://www.w3.org/XML/1998/namespace}lang", baseXmlLang)
+        if defaultXmlLang is None:
+            defaultXmlLang = baseXmlLang # allows facts/footnotes to override baseXmlLang
+    ValidateXbrlDimensions.loadDimensionDefaults(targetInstance) # need dimension defaults
+    # roleRef and arcroleRef (of each inline document)
+    for sourceRefs in (modelXbrl.targetRoleRefs, modelXbrl.targetArcroleRefs):
+        for roleRefElt in sourceRefs.values():
+            addChild(targetInstance.modelDocument.xmlRootElement, roleRefElt.qname,
+                     attributes=roleRefElt.items())
+
+    # contexts
+    for context in sorted(modelXbrl.contexts.values(), key=lambda c: c.objectIndex): # contexts may come from multiple IXDS files
+        ignore = targetInstance.createContext(context.entityIdentifier[0],
+                                              context.entityIdentifier[1],
+                                              'instant' if context.isInstantPeriod else
+                                              'duration' if context.isStartEndPeriod
+                                              else 'forever',
+                                              context.startDatetime,
+                                              context.endDatetime,
+                                              None,
+                                              context.qnameDims, [], [],
+                                              id=context.id)
+    for unit in sorted(modelXbrl.units.values(), key=lambda u: u.objectIndex): # units may come from multiple IXDS files
+        measures = unit.measures
+        ignore = targetInstance.createUnit(measures[0], measures[1], id=unit.id)
+
+    modelXbrl.modelManager.showStatus(_("Creating and validating facts"))
+    newFactForOldObjId = {}
+    invalidFacts = []
+    duplicateFacts = frozenset()
+    if deduplicationType is not None:
+        modelXbrl.modelManager.showStatus(_("Deduplicating facts"))
+        deduplicatedFacts = frozenset(ValidateDuplicateFacts.getDeduplicatedFacts(modelXbrl, deduplicationType))
+        duplicateFacts = frozenset(f for f in modelXbrl.facts if f not in deduplicatedFacts)
+
+    def createFacts(facts, parent):
+        for fact in facts:
+            if fact in duplicateFacts:
+                ValidateDuplicateFacts.logDeduplicatedFact(modelXbrl, fact)
+                continue
+            if fact.xValid < VALID and skipInvalid:
+                if fact.xValid < NONE: # don't report Redacted facts
+                    invalidFacts.append(fact)
+            elif fact.isItem: # HF does not de-duplicate, which is currently-desired behavior
+                modelConcept = fact.concept # isItem ensures concept is not None
+                attrs = {"contextRef": fact.contextID}
+                if fact.id:
+                    attrs["id"] = fact.id
+                if fact.isNumeric:
+                    if fact.unitID:
+                        attrs["unitRef"] = fact.unitID
+                    if fact.get("decimals"):
+                        attrs["decimals"] = fact.get("decimals")
+                    if fact.get("precision"):
+                        attrs["precision"] = fact.get("precision")
+                if fact.isNil:
+                    attrs[XbrlConst.qnXsiNil] = "true"
+                    text = None
+                elif ( not(modelConcept.baseXsdType == "token" and modelConcept.isEnumeration)
+                       and fact.xValid >= VALID ):
+                    text = fact.xValue
+                # may need a special case for QNames (especially if prefixes defined below root)
+                else:
+                    text = fact.rawValue if fact.textValue == INVALIDixVALUE else fact.textValue
+                for attrName, attrValue in fact.items():
+                    if attrName.startswith("{"):
+                        attrs[qname(attrName,fact.nsmap)] = attrValue # using qname allows setting prefix in extracted instance
+                newFact = targetInstance.createFact(fact.qname, attributes=attrs, text=text, parent=parent)
+                # if fact.isFraction, create numerator and denominator
+                newFactForOldObjId[fact.objectIndex] = newFact
+                if filingFiles is not None and fact.concept is not None and fact.concept.isTextBlock:
+                    # check for img and other filing references so that referenced files are included in the zip.
+                    for xmltext in [text] + CDATApattern.findall(text):
+                        try:
+                            for elt in XML("<body>\n{0}\n</body>\n".format(xmltext)).iter():
+                                addLocallyReferencedFile(elt, filingFiles)
+                        except (XMLSyntaxError, UnicodeDecodeError):
+                            pass  # TODO: Why ignore UnicodeDecodeError?
+            elif fact.isTuple:
+                attrs = {}
+                if fact.id:
+                    attrs["id"] = fact.id
+                if fact.isNil:
+                    attrs[XbrlConst.qnXsiNil] = "true"
+                for attrName, attrValue in fact.items():
+                    if attrName.startswith("{"):
+                        attrs[qname(attrName,fact.nsmap)] = attrValue
+                newTuple = targetInstance.createFact(fact.qname, attributes=attrs, parent=parent)
+                newFactForOldObjId[fact.objectIndex] = newTuple
+                createFacts(fact.modelTupleFacts, newTuple)
+
+    createFacts(modelXbrl.facts, None)
+    if invalidFacts:
+        modelXbrl.warning("arelle.invalidFactsSkipped",
+                          _("Skipping %(count)s invalid facts in saving extracted instance document."),
+                          modelObject=invalidFacts, count=len(invalidFacts))
+        del invalidFacts[:] # dereference
+    modelXbrl.modelManager.showStatus(_("Creating and validating footnotes and relationships"))
+    HREF = "{http://www.w3.org/1999/xlink}href"
+    footnoteLinks = defaultdict(list)
+    footnoteIdCount = {}
+    for linkKey, linkPrototypes in modelXbrl.baseSets.items():
+        arcrole, linkrole, linkqname, arcqname = linkKey
+        if (linkrole and linkqname and arcqname and  # fully specified roles
+                arcrole != "XBRL-footnotes" and
+                any(lP.modelDocument.type == Type.INLINEXBRL for lP in linkPrototypes)):
+            for linkPrototype in linkPrototypes:
+                if linkPrototype not in footnoteLinks[linkrole]:
+                    footnoteLinks[linkrole].append(linkPrototype)
+    for linkrole in sorted(footnoteLinks.keys()):
+        for linkPrototype in footnoteLinks[linkrole]:
+            newLink = addChild(targetInstance.modelDocument.xmlRootElement,
+                               linkPrototype.qname,
+                               attributes=linkPrototype.attributes)
+            for linkChild in linkPrototype:
+                attributes = linkChild.attributes
+                if isinstance(linkChild, LocPrototype):
+                    if HREF not in linkChild.attributes:
+                        linkChild.attributes[HREF] = \
+                            "#" + elementFragmentIdentifier(newFactForOldObjId[linkChild.dereference().objectIndex])
+                    addChild(newLink, linkChild.qname,
+                             attributes=attributes)
+                elif isinstance(linkChild, ArcPrototype):
+                    addChild(newLink, linkChild.qname, attributes=attributes)
+                elif isinstance(linkChild, ModelInlineFootnote):
+                    idUseCount = footnoteIdCount.get(linkChild.footnoteID, 0) + 1
+                    if idUseCount > 1: # if footnote with id in other links bump the id number
+                        attributes = linkChild.attributes.copy()
+                        attributes["id"] = "{}_{}".format(attributes["id"], idUseCount)
+                    footnoteIdCount[linkChild.footnoteID] = idUseCount
+                    newChild = addChild(newLink, linkChild.qname,
+                                        attributes=attributes)
+                    xmlLang = linkChild.xmlLang
+                    if xmlLang is not None and xmlLang != defaultXmlLang: # default
+                        newChild.set("{http://www.w3.org/XML/1998/namespace}lang", xmlLang)
+                    copyIxFootnoteHtml(linkChild, newChild, targetModelDocument=targetInstance.modelDocument, withText=True)
+
+                    if filingFiles and linkChild.textValue:
+                        footnoteHtml = XML("<body/>")
+                        copyIxFootnoteHtml(linkChild, footnoteHtml)
+                        for elt in footnoteHtml.iter():
+                            addLocallyReferencedFile(elt,filingFiles)
+    return targetInstance
+
+
+def _saveTargetDocument(
+        modelXbrl,
+        targetDocumentFilename,
+        targetDocumentSchemaRefs,
+        outputZip=None,
+        filingFiles=None,
+        xbrliNamespacePrefix=None,
+        deduplicationType: DeduplicationType | None = None,
+        *args, **kwargs):
+    targetUrl = modelXbrl.modelManager.cntlr.webCache.normalizeUrl(targetDocumentFilename, modelXbrl.modelDocument.filepath)
+    targetUrlParts = targetUrl.rpartition(".")
+    targetUrl = targetUrlParts[0] + "_extracted." + targetUrlParts[2]
+    modelXbrl.modelManager.showStatus(_("Extracting instance ") + os.path.basename(targetUrl))
+    htmlRootElt = modelXbrl.modelDocument.xmlRootElement
+    # take baseXmlLang from <html> or <base>
+    baseXmlLang = htmlRootElt.get("{http://www.w3.org/XML/1998/namespace}lang") or htmlRootElt.get("lang")
+    for ixElt in modelXbrl.modelDocument.xmlRootElement.iterdescendants(tag="{http://www.w3.org/1999/xhtml}body"):
+        baseXmlLang = ixElt.get("{http://www.w3.org/XML/1998/namespace}lang") or htmlRootElt.get("lang") or baseXmlLang
+    targetInstance = createTargetInstance(
+        modelXbrl, targetUrl, targetDocumentSchemaRefs, filingFiles, baseXmlLang,
+        xbrliNamespacePrefix=xbrliNamespacePrefix, deduplicationType=deduplicationType,
+    )
+    targetInstance.saveInstance(overrideFilepath=targetUrl, outputZip=outputZip, xmlcharrefreplace=kwargs.get("encodeSavedXmlChars", False))
+    if getattr(modelXbrl, "isTestcaseVariation", False):
+        modelXbrl.extractedInlineInstance = True # for validation comparison
+    modelXbrl.modelManager.showStatus(_("Saved extracted instance"), 5000)
+
+
+def _saveTargetInstanceOverriden(deduplicationType: DeduplicationType | None) -> bool:
+    """
+    Checks if another plugin implements instance extraction, and throws an exception
+    if the provided arguments are not compatible.
+    :param deduplicationType: The deduplication type to be used, if set.
+    :return: True if instance extraction is overridden by another plugin.
+    """
+    for pluginXbrlMethod in pluginClassMethods('InlineDocumentSet.SavesTargetInstance'):
+        if pluginXbrlMethod():
+            if deduplicationType is not None:
+                raise RuntimeError(_('Deduplication is enabled but could not be performed because instance '
+                                     'extraction was performed by another plugin.'))
+            return True
+    return False
 
 
 def addInlineCommandLineOptions(parser):
@@ -174,6 +422,67 @@ def prepareInlineEntrypointFiles(cntlr, options, entrypointFiles):
                 if len(_files) > 0:
                     docsetSurrogatePath = os.path.join(os.path.dirname(_files[0]), IXDS_SURROGATE)
                     entrypointFile["file"] = docsetSurrogatePath + IXDS_DOC_SEPARATOR.join(_files)
+
+
+def saveTargetDocument(
+        cntlr,
+        runInBackground=False,
+        saveTargetFiling=False,
+        encodeSavedXmlChars=False,
+        xbrliNamespacePrefix=None,
+        deduplicationType: DeduplicationType | None = None):
+    # skip if another class handles saving (e.g., EdgarRenderer)
+    if _saveTargetInstanceOverriden(deduplicationType):
+        return
+    # save DTS menu item has been invoked
+    if (cntlr.modelManager is None or
+            cntlr.modelManager.modelXbrl is None or
+            cntlr.modelManager.modelXbrl.modelDocument.type not in (Type.INLINEXBRL, Type.INLINEXBRLDOCUMENTSET)):
+        cntlr.addToLog("No inline XBRL document set loaded.")
+        return
+    modelDocument = cntlr.modelManager.modelXbrl.modelDocument
+    if modelDocument.type == Type.INLINEXBRLDOCUMENTSET:
+        targetFilename = modelDocument.targetDocumentPreferredFilename
+        targetSchemaRefs = modelDocument.targetDocumentSchemaRefs
+        if targetFilename is None:
+            cntlr.addToLog("No inline XBRL document in the inline XBRL document set.")
+            return
+    else:
+        filepath, fileext = os.path.splitext(modelDocument.filepath)
+        if fileext not in (".xml", ".xbrl"):
+            fileext = ".xbrl"
+        targetFilename = filepath + fileext
+        targetSchemaRefs = set(modelDocument.relativeUri(referencedDoc.uri)
+                               for referencedDoc in modelDocument.referencesDocument.keys()
+                               if referencedDoc.type == Type.SCHEMA)
+    if runInBackground:
+        import threading
+        thread = threading.Thread(target=lambda _x = modelDocument.modelXbrl, _f = targetFilename, _s = targetSchemaRefs:
+        _saveTargetDocument(_x, _f, _s, deduplicationType=deduplicationType))
+        thread.daemon = True
+        thread.start()
+    else:
+        if saveTargetFiling:
+            filingZip = zipfile.ZipFile(os.path.splitext(targetFilename)[0] + ".zip", 'w', zipfile.ZIP_DEFLATED, True)
+            filingFiles = set()
+            # copy referencedDocs to two levels
+            def addRefDocs(doc):
+                for refDoc in doc.referencesDocument.keys():
+                    if refDoc.uri not in filingFiles:
+                        filingFiles.add(refDoc.uri)
+                        addRefDocs(refDoc)
+            addRefDocs(modelDocument)
+        else:
+            filingZip = None
+            filingFiles = None
+        _saveTargetDocument(modelDocument.modelXbrl, targetFilename, targetSchemaRefs, filingZip, filingFiles,
+                           encodeSavedXmlChars=encodeSavedXmlChars, xbrliNamespacePrefix=xbrliNamespacePrefix,
+                           deduplicationType=deduplicationType)
+        if saveTargetFiling:
+            instDir = os.path.dirname(modelDocument.uri.split(IXDS_DOC_SEPARATOR)[0])
+            for refFile in filingFiles:
+                if refFile.startswith(instDir):
+                    filingZip.write(refFile, modelDocument.relativeUri(refFile))
 
 
 def skipExpectedInstanceComparison():
