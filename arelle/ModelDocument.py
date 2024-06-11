@@ -22,6 +22,7 @@ from arelle.XhtmlValidate import ixMsgCode
 from arelle.XmlValidateConst import VALID
 from arelle.XmlValidate import validate as xmlValidate, lxmlSchemaValidate
 from arelle.ModelTestcaseObject import ModelTestcaseVariation
+from arelle.inline import InlineLoader
 
 creationSoftwareNames = None
 
@@ -141,9 +142,12 @@ def load(modelXbrl, uri, base=None, referringElement=None, isEntry=False, isDisc
     modelXbrl.modelManager.showStatus(_("parsing {0}").format(uri))
     file = None
     try:
-        for pluginMethod in pluginClassMethods("ModelDocument.PullLoader"):
+        pullLoaders = [
+            InlineLoader.inlineXbrlDocumentSetLoader,
+        ] + pluginClassMethods("ModelDocument.PullLoader")
+        for pullLoader in pullLoaders:
             # assumes not possible to check file in string format or not all available at once
-            modelDocument = pluginMethod(modelXbrl, normalizedUri, filepath, isEntry=isEntry, namespace=namespace, **kwargs)
+            modelDocument = pullLoader(modelXbrl, normalizedUri, filepath, isEntry=isEntry, namespace=namespace, **kwargs)
             if isinstance(modelDocument, Exception):
                 return None
             if modelDocument is not None:

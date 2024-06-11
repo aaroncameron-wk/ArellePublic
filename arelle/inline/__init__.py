@@ -21,6 +21,7 @@ from arelle.ValidateDuplicateFacts import DeduplicationType
 from arelle.ValidateFilingText import CDATApattern
 from arelle.XmlUtil import xmlnsprefix, addChild, setXmlns, elementFragmentIdentifier, copyIxFootnoteHtml
 from arelle.XmlValidate import VALID, NONE
+from arelle.XmlValidate import validate as xmlValidate
 
 
 DEFAULT_TARGET = "(default)"
@@ -398,6 +399,14 @@ def getReportPackageIxds(filesource, lookOutsideReportsDirectory=False, combineI
             # return the first inline doc
             return f
     return None
+
+
+def loadDTS(modelXbrl, modelIxdsDocument):
+    for htmlElt in modelXbrl.ixdsHtmlElements:
+        for ixRefElt in htmlElt.iterdescendants(tag=htmlElt.modelDocument.ixNStag + "references"):
+            if ixRefElt.get("target") == modelXbrl.ixdsTarget:
+                modelIxdsDocument.schemaLinkbaseRefsDiscover(ixRefElt)
+                xmlValidate(modelXbrl, ixRefElt) # validate instance elements
 
 
 def prepareInlineEntrypointFiles(cntlr, options, entrypointFiles):
