@@ -90,24 +90,19 @@ from arelle.CntlrCmdLine import filesourceEntrypointFiles
 from arelle.PrototypeDtsObject import LocPrototype, ArcPrototype
 from arelle.FileSource import archiveFilenameParts, archiveFilenameSuffixes
 from arelle.ModelInstanceObject import ModelInlineFootnote
-from arelle.ModelObject import ModelObject
-from arelle.ModelDocument import ModelDocument, ModelDocumentReference, Type, load, create, inlineIxdsDiscover
+from arelle.ModelDocument import ModelDocumentReference, Type, load, create, inlineIxdsDiscover
 from arelle.ModelValue import INVALIDixVALUE, qname
 from arelle.PluginManager import pluginClassMethods
-from arelle.PythonUtil import attrdict
 from arelle.UrlUtil import isHttpUrl
 from arelle.ValidateFilingText import CDATApattern
 from arelle.Version import authorLabel, copyrightLabel
-from arelle.XmlUtil import addChild, copyIxFootnoteHtml, elementFragmentIdentifier, elementChildSequence, xmlnsprefix, setXmlns
+from arelle.XmlUtil import addChild, copyIxFootnoteHtml, elementFragmentIdentifier, xmlnsprefix, setXmlns
 from arelle.XmlValidate import validate as xmlValidate, VALID, NONE
 import os, zipfile
 import regex as re
-from optparse import SUPPRESS_HELP
 from lxml.etree import XML, XMLSyntaxError
 from collections import defaultdict
 
-
-skipExpectedInstanceComparison = None
 
 def loadDTS(modelXbrl, modelIxdsDocument):
     for htmlElt in modelXbrl.ixdsHtmlElements:
@@ -604,71 +599,6 @@ def commandLineXbrlRun(cntlr, options: RuntimeOptions, modelXbrl, *args, **kwarg
                                          xbrliNamespacePrefix=getattr(options, "xbrliNamespacePrefix"),
                                          deduplicationType=deduplicationType)
 
-def testcaseVariationReadMeFirstUris(modelTestcaseVariation):
-    _readMeFirstUris = [os.path.join(modelTestcaseVariation.modelDocument.filepathdir,
-                                     (elt.get("{http://www.w3.org/1999/xlink}href") or elt.text).strip())
-                        for elt in modelTestcaseVariation.iterdescendants()
-                        if isinstance(elt,ModelObject) and elt.get("readMeFirst") == "true"]
-    if len(_readMeFirstUris) >= MINIMUM_IXDS_DOC_COUNT and all(
-        Type.identify(modelTestcaseVariation.modelXbrl.fileSource, f) == Type.INLINEXBRL for f in _readMeFirstUris):
-        docsetSurrogatePath = os.path.join(os.path.dirname(_readMeFirstUris[0]), IXDS_SURROGATE)
-        modelTestcaseVariation._readMeFirstUris = [docsetSurrogatePath + IXDS_DOC_SEPARATOR.join(_readMeFirstUris)]
-        return True
-
-def testcaseVariationReportPackageIxds(filesource, lookOutsideReportsDirectory=False, combineIntoSingleIxds=False):
-    # single report directory
-    reportFiles = []
-    ixdsDirFiles = defaultdict(list)
-    reportDir = "*uninitialized*"
-    reportDirLen = 0
-    for f in filesource.dir:
-        if f.endswith("/reports/") and reportDir == "*uninitialized*":
-            reportDir = f
-            reportDirLen = len(f)
-        elif f.startswith(reportDir):
-            if "/" not in f[reportDirLen:]:
-                filesource.select(f)
-                if Type.identify(filesource, filesource.url) in (Type.INSTANCE, Type.INLINEXBRL):
-                    reportFiles.append(f)
-            else:
-                ixdsDir, _sep, ixdsFile = f.rpartition("/")
-                if ixdsFile:
-                    filesource.select(f)
-                    if Type.identify(filesource, filesource.url) == Type.INLINEXBRL:
-                        ixdsDirFiles[ixdsDir].append(f)
-    if lookOutsideReportsDirectory:
-        for f in filesource.dir:
-            filesource.select(f)
-            if Type.identify(filesource, filesource.url) in (Type.INSTANCE, Type.INLINEXBRL):
-                reportFiles.append(f)
-    if combineIntoSingleIxds and (reportFiles or len(ixdsDirFiles) > 1):
-        docsetSurrogatePath = os.path.join(filesource.baseurl, IXDS_SURROGATE)
-        for ixdsFiles in ixdsDirFiles.values():
-            reportFiles.extend(ixdsFiles)
-        return docsetSurrogatePath + IXDS_DOC_SEPARATOR.join(os.path.join(filesource.baseurl,f) for f in reportFiles)
-    for ixdsDir, ixdsFiles in sorted(ixdsDirFiles.items()):
-        # use the first ixds in report package
-        docsetSurrogatePath = os.path.join(filesource.baseurl, ixdsDir, IXDS_SURROGATE)
-        return docsetSurrogatePath + IXDS_DOC_SEPARATOR.join(os.path.join(filesource.baseurl,f) for f in ixdsFiles)
-    for f in reportFiles:
-        filesource.select(f)
-        if Type.identify(filesource, filesource.url) in (Type.INSTANCE, Type.INLINEXBRL):
-            # return the first inline doc
-            return f
-    return None
-
-
-def testcaseVariationResultInstanceUri(modelTestcaseObject):
-    if skipExpectedInstanceComparison:
-        # block any comparison URIs
-        return "" # block any testcase URIs
-    return None # default behavior
-
-def testcaseVariationArchiveIxds(val, filesource, entrypointFiles):
-    commandLineFilingStart(val.modelXbrl.modelManager.cntlr,
-                           attrdict(skipExpectedInstanceComparison=True),
-                           filesource, entrypointFiles)
-
 
 def inlineDocsetDiscovery(filesource, entrypointFiles): # [{"file":"url1"}, ...]
     if len(entrypointFiles): # return [{"ixds":[{"file":"url1"}, ...]}]
@@ -776,8 +706,4 @@ __pluginInfo__ = {
     'ModelDocument.DiscoverIxdsDts': discoverIxdsDts,
     'ModelDocument.SelectIxdsTarget': selectTargetDocument,
     'ModelDocument.IxdsTargetDiscovered': ixdsTargetDiscoveryCompleted,
-    'ModelTestcaseVariation.ReadMeFirstUris': testcaseVariationReadMeFirstUris,
-    'ModelTestcaseVariation.ArchiveIxds': testcaseVariationArchiveIxds,
-    'ModelTestcaseVariation.ReportPackageIxds': testcaseVariationReportPackageIxds,
-    'ModelTestcaseVariation.ResultXbrlInstanceUri': testcaseVariationResultInstanceUri,
 }

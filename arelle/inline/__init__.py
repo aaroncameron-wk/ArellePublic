@@ -2,15 +2,19 @@
 See COPYRIGHT.md for copyright information.
 """
 import os
+from collections import defaultdict
 from optparse import SUPPRESS_HELP
 from typing import Type
 
 from arelle import ValidateDuplicateFacts, FileSource
+from arelle.ModelObject import ModelObject
 
 DEFAULT_TARGET = "(default)"
 IXDS_SURROGATE = "_IXDS#?#"  # surrogate (fake) file name for inline XBRL doc set (IXDS)
 IXDS_DOC_SEPARATOR = "#?#"  # the files of the document set follow the above "surrogate" with these separators
 MINIMUM_IXDS_DOC_COUNT = 2  # make this 2 to cause single-documents to be processed without a document set object
+
+_skipExpectedInstanceComparison = None
 
 
 def addInlineCommandLineOptions(parser):
@@ -65,9 +69,64 @@ def addInlineCommandLineOptions(parser):
                       help=SUPPRESS_HELP)
 
 
+def getInlineReadMeFirstUris(modelTestcaseVariation):
+    _readMeFirstUris = [os.path.join(modelTestcaseVariation.modelDocument.filepathdir,
+                                     (elt.get("{http://www.w3.org/1999/xlink}href") or elt.text).strip())
+                        for elt in modelTestcaseVariation.iterdescendants()
+                        if isinstance(elt,ModelObject) and elt.get("readMeFirst") == "true"]
+    if len(_readMeFirstUris) >= MINIMUM_IXDS_DOC_COUNT and all(
+            Type.identify(modelTestcaseVariation.modelXbrl.fileSource, f) == Type.INLINEXBRL for f in _readMeFirstUris):
+        docsetSurrogatePath = os.path.join(os.path.dirname(_readMeFirstUris[0]), IXDS_SURROGATE)
+        modelTestcaseVariation._readMeFirstUris = [docsetSurrogatePath + IXDS_DOC_SEPARATOR.join(_readMeFirstUris)]
+        return True
+
+
+def getReportPackageIxds(filesource, lookOutsideReportsDirectory=False, combineIntoSingleIxds=False):
+    # single report directory
+    reportFiles = []
+    ixdsDirFiles = defaultdict(list)
+    reportDir = "*uninitialized*"
+    reportDirLen = 0
+    for f in filesource.dir:
+        if f.endswith("/reports/") and reportDir == "*uninitialized*":
+            reportDir = f
+            reportDirLen = len(f)
+        elif f.startswith(reportDir):
+            if "/" not in f[reportDirLen:]:
+                filesource.select(f)
+                if Type.identify(filesource, filesource.url) in (Type.INSTANCE, Type.INLINEXBRL):
+                    reportFiles.append(f)
+            else:
+                ixdsDir, _sep, ixdsFile = f.rpartition("/")
+                if ixdsFile:
+                    filesource.select(f)
+                    if Type.identify(filesource, filesource.url) == Type.INLINEXBRL:
+                        ixdsDirFiles[ixdsDir].append(f)
+    if lookOutsideReportsDirectory:
+        for f in filesource.dir:
+            filesource.select(f)
+            if Type.identify(filesource, filesource.url) in (Type.INSTANCE, Type.INLINEXBRL):
+                reportFiles.append(f)
+    if combineIntoSingleIxds and (reportFiles or len(ixdsDirFiles) > 1):
+        docsetSurrogatePath = os.path.join(filesource.baseurl, IXDS_SURROGATE)
+        for ixdsFiles in ixdsDirFiles.values():
+            reportFiles.extend(ixdsFiles)
+        return docsetSurrogatePath + IXDS_DOC_SEPARATOR.join(os.path.join(filesource.baseurl,f) for f in reportFiles)
+    for ixdsDir, ixdsFiles in sorted(ixdsDirFiles.items()):
+        # use the first ixds in report package
+        docsetSurrogatePath = os.path.join(filesource.baseurl, ixdsDir, IXDS_SURROGATE)
+        return docsetSurrogatePath + IXDS_DOC_SEPARATOR.join(os.path.join(filesource.baseurl,f) for f in ixdsFiles)
+    for f in reportFiles:
+        filesource.select(f)
+        if Type.identify(filesource, filesource.url) in (Type.INSTANCE, Type.INLINEXBRL):
+            # return the first inline doc
+            return f
+    return None
+
+
 def prepareInlineEntrypointFiles(cntlr, options, entrypointFiles):
-    global skipExpectedInstanceComparison
-    skipExpectedInstanceComparison = getattr(options, "skipExpectedInstanceComparison", False)
+    global _skipExpectedInstanceComparison
+    _skipExpectedInstanceComparison = getattr(options, "skipExpectedInstanceComparison", False)
     if isinstance(entrypointFiles, list):
         # check for any inlineDocumentSet in list
         for entrypointFile in entrypointFiles:
@@ -107,3 +166,8 @@ def prepareInlineEntrypointFiles(cntlr, options, entrypointFiles):
                 if len(_files) > 0:
                     docsetSurrogatePath = os.path.join(os.path.dirname(_files[0]), IXDS_SURROGATE)
                     entrypointFile["file"] = docsetSurrogatePath + IXDS_DOC_SEPARATOR.join(_files)
+
+
+def skipExpectedInstanceComparison():
+    global _skipExpectedInstanceComparison
+    return bool(_skipExpectedInstanceComparison)

@@ -10,7 +10,8 @@ import regex as re
 from collections import defaultdict, OrderedDict
 from arelle import (FileSource, ModelXbrl, ModelDocument, ModelVersReport, XbrlConst,
                ValidateXbrl, ValidateVersReport,
-               ValidateInfoset, ViewFileRenderedLayout, UrlUtil)
+               ValidateInfoset, ViewFileRenderedLayout, UrlUtil, inline)
+from arelle.PythonUtil import attrdict
 from arelle.formula import ValidateFormula
 from arelle.ModelDocument import Type, ModelDocumentReference, load as modelDocumentLoad
 from arelle.ModelDtsObject import ModelResource
@@ -285,6 +286,7 @@ class Validate:
                                             pluginXbrlMethod(self, _rptPkgIxdsOptions)
                                         filesource.loadTaxonomyPackageMappings(errors=_errors, expectTaxonomyPackage=expectTaxonomyPackage)
                                         filesource.select(None) # must select loadable reports (not the taxonomy package itself)
+                                        filesource.select(inline.getReportPackageIxds(filesource, **_rptPkgIxdsOptions))
                                         for pluginXbrlMethod in pluginClassMethods("ModelTestcaseVariation.ReportPackageIxds"):
                                             filesource.select(pluginXbrlMethod(filesource, **_rptPkgIxdsOptions))
                                     else:
@@ -292,6 +294,11 @@ class Validate:
                                         entrypoints = filesourceEntrypointFiles(filesource)
                                         if entrypoints:
                                             # resolve an IXDS in entrypoints
+                                            inline.prepareInlineEntrypointFiles(
+                                                self.modelXbrl.modelManager.cntlr,
+                                                attrdict(skipExpectedInstanceComparison=True),
+                                                entrypoints
+                                            )
                                             for pluginXbrlMethod in pluginClassMethods("ModelTestcaseVariation.ArchiveIxds"):
                                                 pluginXbrlMethod(self, filesource,entrypoints)
                                             filesource.select(entrypoints[0].get("file", None) )

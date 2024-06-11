@@ -5,7 +5,7 @@ import os, io, logging
 from collections import defaultdict
 from typing import Optional
 
-from arelle import XmlUtil, XbrlConst, ModelValue
+from arelle import XmlUtil, XbrlConst, ModelValue, inline
 from arelle.ModelObject import ModelObject
 from arelle.PluginManager import pluginClassMethods
 
@@ -104,7 +104,8 @@ class ModelTestcaseVariation(ModelObject):
             self._readMeFirstUris = []
             self.readMeFirstElements = []
             # first look if any plugin method to get readme first URIs
-            if not any(pluginXbrlMethod(self)
+            if not inline.getInlineReadMeFirstUris(self) and \
+                    not any(pluginXbrlMethod(self)
                        for pluginXbrlMethod in pluginClassMethods("ModelTestcaseVariation.ReadMeFirstUris")):
                 if self.localName == "testGroup":  #w3c testcase
                     instanceTestElement = XmlUtil.descendant(self, None, "instanceTest")
@@ -186,6 +187,8 @@ class ModelTestcaseVariation(ModelObject):
 
     @property
     def resultXbrlInstanceUri(self):
+        if inline.skipExpectedInstanceComparison():
+            return None
         for pluginXbrlMethod in pluginClassMethods("ModelTestcaseVariation.ResultXbrlInstanceUri"):
             resultInstanceUri = pluginXbrlMethod(self)
             if resultInstanceUri is not None:
