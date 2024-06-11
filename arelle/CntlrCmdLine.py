@@ -962,6 +962,7 @@ class CntlrCmdLine(Cntlr.Cntlr):
             if not (sourceZipStream and len(_entrypointFiles) > 0):
                 filesourceEntrypointFiles(filesource, _entrypointFiles)
 
+        inline.prepareInlineEntrypointFiles(self, options, _entrypointFiles)
         for pluginXbrlMethod in pluginClassMethods("CntlrCmdLine.Filing.Start"):
             pluginXbrlMethod(self, options, filesource, _entrypointFiles, sourceZipStream=sourceZipStream, responseZipStream=responseZipStream)
         for _entrypoint in _entrypointFiles:

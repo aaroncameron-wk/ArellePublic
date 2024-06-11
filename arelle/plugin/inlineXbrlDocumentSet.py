@@ -569,50 +569,6 @@ def runSaveTargetDocumentMenuCommand(
                     filingZip.write(refFile, modelDocument.relativeUri(refFile))
 
 
-def commandLineFilingStart(cntlr, options, filesource, entrypointFiles, *args, **kwargs):
-    global skipExpectedInstanceComparison
-    skipExpectedInstanceComparison = getattr(options, "skipExpectedInstanceComparison", False)
-    if isinstance(entrypointFiles, list):
-        # check for any inlineDocumentSet in list
-        for entrypointFile in entrypointFiles:
-            _ixds = entrypointFile.get("ixds")
-            if isinstance(_ixds, list):
-                # build file surrogate for inline document set
-                _files = [e["file"] for e in _ixds if isinstance(e, dict)]
-                if len(_files) == 1:
-                    urlsByType = {}
-                    if os.path.isfile(_files[0]) and any(_files[0].endswith(e) for e in (".zip", ".ZIP", ".tar.gz" )): # check if an archive file
-                        filesource = FileSource.openFileSource(_files[0], cntlr)
-                        if filesource.isArchive:
-                            for _archiveFile in (filesource.dir or ()): # .dir might be none if IOerror
-                                filesource.select(_archiveFile)
-                                identifiedType = Type.identify(filesource, filesource.url)
-                                if identifiedType in (Type.INSTANCE, Type.INLINEXBRL):
-                                    urlsByType.setdefault(identifiedType, []).append(filesource.url)
-                        filesource.close()
-                    elif os.path.isdir(_files[0]):
-                        _fileDir = _files[0]
-                        for _localName in os.listdir(_fileDir):
-                            _file = os.path.join(_fileDir, _localName)
-                            if os.path.isfile(_file):
-                                filesource = FileSource.openFileSource(_file, cntlr)
-                                identifiedType = Type.identify(filesource, filesource.url)
-                                if identifiedType in (Type.INSTANCE, Type.INLINEXBRL):
-                                    urlsByType.setdefault(identifiedType, []).append(filesource.url)
-                                filesource.close()
-                    if urlsByType:
-                        _files = []
-                        # use inline instances, if any, else non-inline instances
-                        for identifiedType in (Type.INLINEXBRL, Type.INSTANCE):
-                            for url in urlsByType.get(identifiedType, []):
-                                _files.append(url)
-                            if _files:
-                                break # found inline (or non-inline) entrypoint files, don't look for any other type
-                if len(_files) > 0:
-                    docsetSurrogatePath = os.path.join(os.path.dirname(_files[0]), IXDS_SURROGATE)
-                    entrypointFile["file"] = docsetSurrogatePath + IXDS_DOC_SEPARATOR.join(_files)
-
-
 def saveTargetInstanceOverriden(deduplicationType: DeduplicationType | None) -> bool:
     """
     Checks if another plugin implements instance extraction, and throws an exception
@@ -813,7 +769,6 @@ __pluginInfo__ = {
     'InlineDocumentSet.CreateTargetInstance': createTargetInstance,
     'CntlrWinMain.Menu.File.Open': fileOpenMenuEntender,
     'CntlrWinMain.Menu.Tools': saveTargetDocumentMenuEntender,
-    'CntlrCmdLine.Filing.Start': commandLineFilingStart,
     'CntlrCmdLine.Xbrl.Run': commandLineXbrlRun,
     'ModelDocument.PullLoader': inlineXbrlDocumentSetLoader,
     'ModelDocument.IdentifyType': identifyInlineXbrlDocumentSet,
