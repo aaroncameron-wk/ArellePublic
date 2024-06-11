@@ -10,6 +10,12 @@ from arelle.inline import DEFAULT_TARGET, IXDS_SURROGATE, IXDS_DOC_SEPARATOR, lo
 from arelle.inline.ModelInlineXbrlDocumentSet import ModelInlineXbrlDocumentSet
 
 
+def discoverInlineXbrlDocumentSet(modelDocument, *args, **kwargs):
+    if isinstance(modelDocument, ModelInlineXbrlDocumentSet):
+        return modelDocument.discoverInlineXbrlDocumentSet()
+    return False  # not discoverable by this plug-in
+
+
 def identifyInlineXbrlDocumentSet(modelXbrl, rootNode, filepath):
     for manifestElt in rootNode.iter(tag="{http://disclosure.edinet-fsa.go.jp/2013/manifest}manifest"):
         # it's an edinet fsa manifest of an inline XBRL document set

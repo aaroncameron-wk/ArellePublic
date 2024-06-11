@@ -342,8 +342,10 @@ def load(modelXbrl, uri, base=None, referringElement=None, isEntry=False, isDisc
             modelDocument.inDTS = True
 
         # discovery (parsing)
-        if any(pluginMethod(modelDocument)
-               for pluginMethod in pluginClassMethods("ModelDocument.Discover")):
+        discoverers = [
+            InlineLoader.discoverInlineXbrlDocumentSet
+        ] + pluginClassMethods("ModelDocument.Discover")
+        if any(discoverer(modelDocument) for discoverer in discoverers):
             pass # discovery was performed by plug-in, we're done
         elif _type == Type.SCHEMA:
             modelDocument.schemaDiscover(rootNode, isIncluded, isSupplemental, namespace)

@@ -94,11 +94,6 @@ import os
 import regex as re
 
 
-def discoverInlineXbrlDocumentSet(modelDocument, *args, **kwargs):
-    if isinstance(modelDocument, ModelInlineXbrlDocumentSet):
-        return modelDocument.discoverInlineXbrlDocumentSet()
-    return False  # not discoverable by this plug-in
-
 def fileOpenMenuEntender(cntlr, menu, *args, **kwargs):
     # install DialogURL for GUI menu operation of runOpenWebInlineDocumentSetMenuCommand
     global DialogURL
@@ -267,7 +262,6 @@ __pluginInfo__ = {
     # classes of mount points (required)
     'CntlrWinMain.Menu.File.Open': fileOpenMenuEntender,
     'CntlrWinMain.Menu.Tools': saveTargetDocumentMenuEntender,
-    'ModelDocument.Discover': discoverInlineXbrlDocumentSet,
     'ModelDocument.DiscoverIxdsDts': discoverIxdsDts,
     'ModelDocument.SelectIxdsTarget': selectTargetDocument,
     'ModelDocument.IxdsTargetDiscovered': ixdsTargetDiscoveryCompleted,
