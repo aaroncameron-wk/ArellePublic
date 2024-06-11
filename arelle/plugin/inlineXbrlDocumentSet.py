@@ -176,9 +176,6 @@ def runOpenInlineDocumentSetMenuCommand(cntlr, filenames, runInBackground=False,
         cntlr.fileOpenFile(filename)
 
 
-def discoverIxdsDts(modelXbrl):
-    return hasattr(modelXbrl, "ixdsTarget") # if no target specified, block ixds discovery until all IX docs are loaded
-
 def ixdsTargets(ixdsHtmlElements):
     return sorted(set(elt.get("target", DEFAULT_TARGET)
                               for htmlElt in ixdsHtmlElements
@@ -262,7 +259,6 @@ __pluginInfo__ = {
     # classes of mount points (required)
     'CntlrWinMain.Menu.File.Open': fileOpenMenuEntender,
     'CntlrWinMain.Menu.Tools': saveTargetDocumentMenuEntender,
-    'ModelDocument.DiscoverIxdsDts': discoverIxdsDts,
     'ModelDocument.SelectIxdsTarget': selectTargetDocument,
     'ModelDocument.IxdsTargetDiscovered': ixdsTargetDiscoveryCompleted,
 }
