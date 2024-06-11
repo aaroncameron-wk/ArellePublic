@@ -304,8 +304,11 @@ def load(modelXbrl, uri, base=None, referringElement=None, isEntry=False, isDisc
             # any xml document can be an inline document, only html and xhtml are found above
             _type = Type.INLINEXBRL
         else:
-            for pluginMethod in pluginClassMethods("ModelDocument.IdentifyType"):
-                _identifiedType = pluginMethod(modelXbrl, rootNode, filepath)
+            identifiers = [
+                InlineLoader.identifyInlineXbrlDocumentSet
+            ] + pluginClassMethods("ModelDocument.IdentifyType")
+            for identifier in identifiers:
+                _identifiedType = identifier(modelXbrl, rootNode, filepath)
                 if _identifiedType is not None:
                     _type, _class, rootNode = _identifiedType
                     break

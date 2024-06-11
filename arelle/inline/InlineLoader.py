@@ -7,6 +7,14 @@ from arelle import ModelDocument
 from arelle.ModelDocument import Type, ModelDocumentReference, inlineIxdsDiscover
 from arelle.UrlUtil import isHttpUrl
 from arelle.inline import DEFAULT_TARGET, IXDS_SURROGATE, IXDS_DOC_SEPARATOR, loadDTS
+from arelle.inline.ModelInlineXbrlDocumentSet import ModelInlineXbrlDocumentSet
+
+
+def identifyInlineXbrlDocumentSet(modelXbrl, rootNode, filepath):
+    for manifestElt in rootNode.iter(tag="{http://disclosure.edinet-fsa.go.jp/2013/manifest}manifest"):
+        # it's an edinet fsa manifest of an inline XBRL document set
+        return (Type.INLINEXBRLDOCUMENTSET, ModelInlineXbrlDocumentSet, manifestElt)
+    return None # not a document set
 
 
 # this loader is used for test cases of multi-ix doc sets

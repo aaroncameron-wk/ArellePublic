@@ -94,12 +94,6 @@ import os
 import regex as re
 
 
-def identifyInlineXbrlDocumentSet(modelXbrl, rootNode, filepath):
-    for manifestElt in rootNode.iter(tag="{http://disclosure.edinet-fsa.go.jp/2013/manifest}manifest"):
-        # it's an edinet fsa manifest of an inline XBRL document set
-        return (Type.INLINEXBRLDOCUMENTSET, ModelInlineXbrlDocumentSet, manifestElt)
-    return None # not a document set
-
 def discoverInlineXbrlDocumentSet(modelDocument, *args, **kwargs):
     if isinstance(modelDocument, ModelInlineXbrlDocumentSet):
         return modelDocument.discoverInlineXbrlDocumentSet()
@@ -273,7 +267,6 @@ __pluginInfo__ = {
     # classes of mount points (required)
     'CntlrWinMain.Menu.File.Open': fileOpenMenuEntender,
     'CntlrWinMain.Menu.Tools': saveTargetDocumentMenuEntender,
-    'ModelDocument.IdentifyType': identifyInlineXbrlDocumentSet,
     'ModelDocument.Discover': discoverInlineXbrlDocumentSet,
     'ModelDocument.DiscoverIxdsDts': discoverIxdsDts,
     'ModelDocument.SelectIxdsTarget': selectTargetDocument,
