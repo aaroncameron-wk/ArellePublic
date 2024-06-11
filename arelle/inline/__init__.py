@@ -15,6 +15,7 @@ from arelle.ModelObject import ModelObject
 from arelle.ModelValue import INVALIDixVALUE, qname
 from arelle.PluginManager import pluginClassMethods
 from arelle.PrototypeDtsObject import LocPrototype, ArcPrototype
+from arelle.RuntimeOptions import RuntimeOptions
 from arelle.UrlUtil import isHttpUrl
 from arelle.ValidateDuplicateFacts import DeduplicationType
 from arelle.ValidateFilingText import CDATApattern
@@ -315,6 +316,25 @@ def addInlineCommandLineOptions(parser):
                       choices=[a.value for a in ValidateDuplicateFacts.DeduplicationType],
                       dest="deduplicateIxbrlFacts",
                       help=SUPPRESS_HELP)
+
+
+def extractTargetDocumentFromIxds(cntlr, options: RuntimeOptions):
+    deduplicationTypeArg = getattr(options, "deduplicateIxbrlFacts", None)
+    deduplicationType = None if deduplicationTypeArg is None else DeduplicationType(deduplicationTypeArg)
+    # skip if another class handles saving (e.g., EdgarRenderer)
+    if _saveTargetInstanceOverriden(deduplicationType):
+        return
+    # extend XBRL-loaded run processing for this option
+    if cntlr.modelManager is None or cntlr.modelManager.modelXbrl is None or (
+            cntlr.modelManager.modelXbrl.modelDocument.type not in (Type.INLINEXBRL, Type.INLINEXBRLDOCUMENTSET)):
+        cntlr.addToLog("No inline XBRL document or manifest loaded.")
+        return
+    saveTargetDocument(cntlr,
+                       runInBackground=False,
+                       saveTargetFiling=getattr(options, "saveTargetFiling", False),
+                       encodeSavedXmlChars=getattr(options, "encodeSavedXmlChars", False),
+                       xbrliNamespacePrefix=getattr(options, "xbrliNamespacePrefix"),
+                       deduplicationType=deduplicationType)
 
 
 def discoverInlineDocset(entrypointFiles): # [{"file":"url1"}, ...]

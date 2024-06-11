@@ -280,26 +280,6 @@ def runOpenInlineDocumentSetMenuCommand(cntlr, filenames, runInBackground=False,
         cntlr.fileOpenFile(filename)
 
 
-def commandLineXbrlRun(cntlr, options: RuntimeOptions, modelXbrl, *args, **kwargs):
-    deduplicationTypeArg = getattr(options, "deduplicateIxbrlFacts", None)
-    deduplicationType = None if deduplicationTypeArg is None else DeduplicationType(deduplicationTypeArg)
-    # skip if another class handles saving (e.g., EdgarRenderer)
-    if _saveTargetInstanceOverriden(deduplicationType):
-        return
-    # extend XBRL-loaded run processing for this option
-    if getattr(options, "saveTargetInstance", False) or getattr(options, "saveTargetFiling", False):
-        if cntlr.modelManager is None or cntlr.modelManager.modelXbrl is None or (
-            cntlr.modelManager.modelXbrl.modelDocument.type not in (Type.INLINEXBRL, Type.INLINEXBRLDOCUMENTSET)):
-            cntlr.addToLog("No inline XBRL document or manifest loaded.")
-            return
-        saveTargetDocument(cntlr,
-                                         runInBackground=False,
-                                         saveTargetFiling=getattr(options, "saveTargetFiling", False),
-                                         encodeSavedXmlChars=getattr(options, "encodeSavedXmlChars", False),
-                                         xbrliNamespacePrefix=getattr(options, "xbrliNamespacePrefix"),
-                                         deduplicationType=deduplicationType)
-
-
 def discoverIxdsDts(modelXbrl):
     return hasattr(modelXbrl, "ixdsTarget") # if no target specified, block ixds discovery until all IX docs are loaded
 
@@ -386,7 +366,6 @@ __pluginInfo__ = {
     # classes of mount points (required)
     'CntlrWinMain.Menu.File.Open': fileOpenMenuEntender,
     'CntlrWinMain.Menu.Tools': saveTargetDocumentMenuEntender,
-    'CntlrCmdLine.Xbrl.Run': commandLineXbrlRun,
     'ModelDocument.PullLoader': inlineXbrlDocumentSetLoader,
     'ModelDocument.IdentifyType': identifyInlineXbrlDocumentSet,
     'ModelDocument.Discover': discoverInlineXbrlDocumentSet,
