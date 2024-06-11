@@ -600,9 +600,6 @@ def commandLineXbrlRun(cntlr, options: RuntimeOptions, modelXbrl, *args, **kwarg
                                          deduplicationType=deduplicationType)
 
 
-def inlineDocsetUrlSeparator():
-    return IXDS_DOC_SEPARATOR
-
 def discoverIxdsDts(modelXbrl):
     return hasattr(modelXbrl, "ixdsTarget") # if no target specified, block ixds discovery until all IX docs are loaded
 
@@ -687,7 +684,6 @@ __pluginInfo__ = {
     'author': authorLabel,
     'copyright': copyrightLabel,
     # classes of mount points (required)
-    'InlineDocumentSet.Url.Separator': inlineDocsetUrlSeparator,
     'InlineDocumentSet.CreateTargetInstance': createTargetInstance,
     'CntlrWinMain.Menu.File.Open': fileOpenMenuEntender,
     'CntlrWinMain.Menu.Tools': saveTargetDocumentMenuEntender,
