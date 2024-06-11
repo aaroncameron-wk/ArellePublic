@@ -600,13 +600,6 @@ def commandLineXbrlRun(cntlr, options: RuntimeOptions, modelXbrl, *args, **kwarg
                                          deduplicationType=deduplicationType)
 
 
-def inlineDocsetDiscovery(filesource, entrypointFiles): # [{"file":"url1"}, ...]
-    if len(entrypointFiles): # return [{"ixds":[{"file":"url1"}, ...]}]
-        # replace contents of entrypointFiles (array object), don't return a new object
-        _entrypointFiles = entrypointFiles.copy()
-        del entrypointFiles[:]
-        entrypointFiles.append( {"ixds": _entrypointFiles} )
-
 def inlineDocsetUrlSeparator():
     return IXDS_DOC_SEPARATOR
 
@@ -694,7 +687,6 @@ __pluginInfo__ = {
     'author': authorLabel,
     'copyright': copyrightLabel,
     # classes of mount points (required)
-    'InlineDocumentSet.Discovery': inlineDocsetDiscovery,
     'InlineDocumentSet.Url.Separator': inlineDocsetUrlSeparator,
     'InlineDocumentSet.CreateTargetInstance': createTargetInstance,
     'CntlrWinMain.Menu.File.Open': fileOpenMenuEntender,

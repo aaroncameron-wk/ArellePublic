@@ -69,6 +69,14 @@ def addInlineCommandLineOptions(parser):
                       help=SUPPRESS_HELP)
 
 
+def discoverInlineDocset(entrypointFiles): # [{"file":"url1"}, ...]
+    if len(entrypointFiles): # return [{"ixds":[{"file":"url1"}, ...]}]
+        # replace contents of entrypointFiles (array object), don't return a new object
+        _entrypointFiles = entrypointFiles.copy()
+        del entrypointFiles[:]
+        entrypointFiles.append( {"ixds": _entrypointFiles} )
+
+
 def getInlineReadMeFirstUris(modelTestcaseVariation):
     _readMeFirstUris = [os.path.join(modelTestcaseVariation.modelDocument.filepathdir,
                                      (elt.get("{http://www.w3.org/1999/xlink}href") or elt.text).strip())

@@ -561,8 +561,7 @@ def filesourceEntrypointFiles(filesource, entrypointFiles=[], inlineOnly=False):
                 entrypointFiles.append({"file":url})
             if entrypointFiles:
                 if identifiedType == ModelDocument.Type.INLINEXBRL:
-                    for pluginXbrlMethod in pluginClassMethods("InlineDocumentSet.Discovery"):
-                        pluginXbrlMethod(filesource, entrypointFiles) # group into IXDS if plugin feature is available
+                    inline.discoverInlineDocset(entrypointFiles)
                 break # found inline (or non-inline) entrypoint files, don't look for any other type
         # for ESEF non-consolidated xhtml documents accept an xhtml entry point
         if not entrypointFiles and not inlineOnly:
