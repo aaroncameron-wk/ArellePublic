@@ -8,7 +8,7 @@ from typing import Any
 from lxml import etree
 from xml.sax import SAXParseException
 from arelle import (PackageManager, XbrlConst, XmlUtil, UrlUtil, ValidateFilingText,
-                    XhtmlValidate, XmlValidateSchema, FunctionIxt)
+                    XhtmlValidate, XmlValidateSchema, FunctionIxt, inline)
 from arelle.FileSource import FileSource
 from arelle.ModelObject import ModelObject
 from arelle.ModelValue import qname
@@ -1411,10 +1411,6 @@ class ModelDocument:
                 if inlineElement.get("target") == ixdsTarget:
                     self.schemaLinkbaseRefsDiscover(inlineElement)
                     xmlValidate(self.modelXbrl, inlineElement) # validate instance elements
-        # validate resources only if no possibility of multi-document ixds for which ix:references not encountered yet
-        if len(list(pluginClassMethods("ModelDocument.SelectIxdsTarget"))) == 0:
-            for inlineElement in htmlElement.iterdescendants(tag=ixNStag + "resources"):
-                xmlValidate(self.modelXbrl, inlineElement) # validate instance elements
         # with DTS loaded, now validate inline HTML (so schema definition of facts is available)
         if htmlElement.namespaceURI == XbrlConst.xhtml:  # must validate xhtml
             XhtmlValidate.xhtmlValidate(self.modelXbrl, htmlElement)  # fails on prefixed content
@@ -1524,8 +1520,11 @@ class ModelDocument:
 # modelIxdsDocument is an inlineDocumentSet or entry inline document (if not a document set)
 #   note that multi-target and multi-instance facts may have html elements belonging to primary ixds instead of this instance ixds
 def inlineIxdsDiscover(modelXbrl, modelIxdsDocument, setTargetModelXbrl=False):
-    for pluginMethod in pluginClassMethods("ModelDocument.SelectIxdsTarget"):
-        pluginMethod(modelXbrl, modelIxdsDocument)
+    selectors = [
+        InlineLoader.selectTargetDocument
+    ] + pluginClassMethods("ModelDocument.SelectIxdsTarget")
+    for selector in selectors:
+        selector(modelXbrl, modelIxdsDocument)
     # extract for a single target document
     ixdsTarget = getattr(modelXbrl, "ixdsTarget", None)
     # compile inline result set

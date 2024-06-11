@@ -401,6 +401,10 @@ def getReportPackageIxds(filesource, lookOutsideReportsDirectory=False, combineI
     return None
 
 
+def isActive():
+    return True  # TODO
+
+
 def loadDTS(modelXbrl, modelIxdsDocument):
     for htmlElt in modelXbrl.ixdsHtmlElements:
         for ixRefElt in htmlElt.iterdescendants(tag=htmlElt.modelDocument.ixNStag + "references"):

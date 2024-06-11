@@ -5,9 +5,16 @@ import os
 
 from arelle import ModelDocument
 from arelle.ModelDocument import Type, ModelDocumentReference, inlineIxdsDiscover
+from arelle.PluginManager import pluginClassMethods
 from arelle.UrlUtil import isHttpUrl
 from arelle.inline import DEFAULT_TARGET, IXDS_SURROGATE, IXDS_DOC_SEPARATOR, loadDTS
 from arelle.inline.ModelInlineXbrlDocumentSet import ModelInlineXbrlDocumentSet
+
+
+def _ixdsTargets(ixdsHtmlElements):
+    return sorted(set(elt.get("target", DEFAULT_TARGET)
+                      for htmlElt in ixdsHtmlElements
+                      for elt in htmlElt.iterfind(f".//{{{htmlElt.modelDocument.ixNS}}}references")))
 
 
 def discoverInlineXbrlDocumentSet(modelDocument, *args, **kwargs):
@@ -104,3 +111,51 @@ def inlineXbrlDocumentSetLoader(modelXbrl, normalizedUri, filepath, isEntry=Fals
             inlineIxdsDiscover(modelXbrl, ixdocset, bool(ixdocs)) # compile cross-document IXDS references
             return ixdocset
     return None
+
+
+def selectTargetDocument(modelXbrl, modelIxdsDocument):
+    if not hasattr(modelXbrl, "ixdsTarget"): # DTS discoverey deferred until all ix docs loaded
+        # isolate any documents to separate IXDSes according to authority submission rules
+        modelXbrl.targetIXDSesToLoad = [] # [[target,[ixdsHtmlElements], ...]
+        for pluginXbrlMethod in pluginClassMethods('InlineDocumentSet.IsolateSeparateIXDSes'):
+            separateIXDSesHtmlElements = pluginXbrlMethod(modelXbrl)
+            if len(separateIXDSesHtmlElements) > 1: # [[ixdsHtml1, ixdsHtml2], [ixdsHtml3...] ...]
+                for separateIXDSHtmlElements in separateIXDSesHtmlElements[1:]:
+                    toLoadIXDS = [_ixdsTargets(separateIXDSHtmlElements),[]]
+                    modelXbrl.targetIXDSesToLoad.append(toLoadIXDS)
+                    for ixdsHtmlElement in separateIXDSHtmlElements:
+                        modelDoc = ixdsHtmlElement.modelDocument
+                        toLoadIXDS[1].append(ixdsHtmlElement)
+                        modelXbrl.ixdsHtmlElements.remove(ixdsHtmlElement)
+                        del modelXbrl.urlDocs[modelDoc.uri]
+                        if modelDoc in modelIxdsDocument.referencesDocument:
+                            del modelIxdsDocument.referencesDocument[modelDoc]
+                # the primary target  instance may have changed
+                modelIxdsDocument.targetDocumentPreferredFilename = os.path.splitext(modelXbrl.ixdsHtmlElements[0].modelDocument.uri)[0] + ".xbrl"
+        # find target attributes
+        _targets = _ixdsTargets(modelXbrl.ixdsHtmlElements)
+        if len(_targets) == 0:
+            _target = DEFAULT_TARGET
+        elif len(_targets) == 1:
+            _target = _targets[0]
+        elif modelXbrl.modelManager.cntlr.hasGui:
+            if True: # provide option to load all or ask user which target
+                modelXbrl.targetIXDSesToLoad.insert(0, [_targets[1:],modelXbrl.ixdsHtmlElements])
+                _target = _targets[0]
+            else: # ask user which target
+                dlg = TargetChoiceDialog(modelXbrl.modelManager.cntlr.parent, _targets)
+                _target = dlg.selection
+        else:
+            # load all targets (supplemental are accessed from first via modelXbrl.loadedModelXbrls)
+            modelXbrl.targetIXDSesToLoad.insert(0, [_targets[1:],modelXbrl.ixdsHtmlElements])
+            _target = _targets[0]
+            #modelXbrl.warning("arelle:unspecifiedTargetDocument",
+            #                  _("Target document not specified, loading %(target)s, found targets %(targets)s"),
+            #                  modelObject=modelXbrl, target=_target, targets=_targets)
+        modelXbrl.ixdsTarget = None if _target == DEFAULT_TARGET else _target or None
+        # load referenced schemas and linkbases (before validating inline HTML
+        loadDTS(modelXbrl, modelIxdsDocument)
+    # now that all ixds doc(s) references loaded, validate resource elements
+    for htmlElt in modelXbrl.ixdsHtmlElements:
+        for inlineElement in htmlElt.iterdescendants(tag=htmlElt.modelDocument.ixNStag + "resources"):
+            xmlValidate(modelXbrl, inlineElement) # validate instance elements
