@@ -81,6 +81,7 @@ from __future__ import annotations
 from arelle import FileSource, ModelXbrl, ValidateXbrlDimensions, XbrlConst, ValidateDuplicateFacts
 from arelle.RuntimeOptions import RuntimeOptions
 from arelle.ValidateDuplicateFacts import DeduplicationType
+from arelle.inline.ModelInlineXbrlDocumentSet import ModelInlineXbrlDocumentSet
 
 DialogURL = None # dynamically imported when first used
 from arelle.CntlrCmdLine import filesourceEntrypointFiles
