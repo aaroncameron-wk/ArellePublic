@@ -6,7 +6,7 @@ This module is Arelle's controller in command line non-interactive mode
 See COPYRIGHT.md for copyright information.
 '''
 from __future__ import annotations
-from arelle import ValidateDuplicateFacts
+from arelle import ValidateDuplicateFacts, inline
 import gettext, time, datetime, os, shlex, sys, traceback, fnmatch, threading, json, logging, platform
 from optparse import OptionGroup, OptionParser, SUPPRESS_HELP
 import regex as re
@@ -387,6 +387,7 @@ def parseArgs(args):
                         arellePluginModules[cmd] = moduleInfo
                         PluginManager.reset()
             break
+    inline.addInlineCommandLineOptions(parser)
     # add plug-in options
     for optionsExtender in pluginClassMethods("CntlrCmdLine.Options"):
         optionsExtender(parser)
@@ -740,6 +741,7 @@ class CntlrCmdLine(Cntlr.Cntlr):
                     if options.webserver: # options may need reparsing dynamically
                         _optionsParser = ParserForDynamicPlugins(options)
                         # add plug-in options
+                        inline.addInlineCommandLineOptions(_optionsParser)
                         for optionsExtender in pluginClassMethods("CntlrCmdLine.Options"):
                             optionsExtender(_optionsParser)
 
