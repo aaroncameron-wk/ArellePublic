@@ -1,110 +1,22 @@
-"""
-See COPYRIGHT.md for copyright information.
-
-## Overview
-
-The Inline XBRL Document Set (IXDS) plugin facilitates the handling of inline XBRL documents.
-It allows for opening and extracting XBRL data from document sets, either defined as an Inline XBRL Document Set or in a
-manifest file (such as JP FSA) that identifies inline XBRL documents.
-
-## Key Features
-
-- **XBRL Document Set Detection**: Detect and load iXBRL documents from a zip file or directory.
-- **Target Document Selection**: Load one or more Target Documents from an Inline Document Set.
-- **Extract XML Instance**: Extract and save XML Instance of a Target Document.
-- **Command Line Support**: Detailed syntax for file and target selection.
-- **GUI Interaction**: Selection dialog for loading inline documents and saving target documents.
-
-## Usage Instructions
-
-### Command Line Usage
-
-- **Loading Inline XBRL Documents from a Zip File**:
-  ```bash
-  python arelleCmdLine.py --plugins inlineXbrlDocumentSet --file '[{"ixds": [{"file": "filing-documents.zip"}]}]'
-  ```
-  This command loads all inline XBRL documents within a zip file as an Inline XBRL Document Set.
-
-- **Loading Inline XBRL Documents from a Directory**:
-  ```bash
-  python arelleCmdLine.py --plugins inlineXbrlDocumentSet --file '[{"ixds": [{"file": "filing-documents-directory"}]}]'
-  ```
-  This command loads all inline XBRL documents within a specified directory.
-
-- **Loading with Default Target Document**:
-  ```bash
-  python arelleCmdLine.py --plugins inlineXbrlDocumentSet --file '[{"ixds": [{"file1": "document-1.html", "file2": "document-2.html"}]}]'
-  ```
-  Load two inline XBRL documents using the default Target Document.
-
-- **Specifying a Different Target Document**:
-  ```bash
-  python arelleCmdLine.py --plugins inlineXbrlDocumentSet --file '[{"ixds": [{"file1": "document-1.html", "file2": "document-2.html"}], "ixdsTarget": "DKGAAP"}]'
-  ```
-  Load two inline XBRL documents using the `DKGAAP` Target Document.
-
-- **Loading Multiple Document Sets**:
-  ```bash
-  python arelleCmdLine.py --plugins inlineXbrlDocumentSet --file '[{"ixds": [{"file": "filing-documents-1.zip"}]}, {"ixds": [{"file": "filing-documents-2.zip"}]}]'
-  ```
-  Load two separate Inline XBRL Document Sets.
-
-- **Extracting and Saving XML Instance**:
-  ```bash
-  python arelleCmdLine.py --plugins inlineXbrlDocumentSet --file '[{"ixds": [{"file": "filing-documents.zip"}]}] --saveInstance'
-  ```
-  Extract and save the XML Instance of the default Target Document from an Inline XBRL Document Set.
-
-### GUI Usage
-
-- **Loading Inline Documents as an IXDS**:
-  1. Navigate to the `File` menu.
-  2. Select `Open File Inline Doc Set`.
-  3. Command/Control select multiple files to load them as an Inline XBRL Document Set.
-
-- **Extracting and Saving XML Instance**:
-  1. Load the Inline XBRL Document Set.
-  2. Navigate to `Tools` in the menu.
-  3. Select `Save target document` to save the XML Instance.
-
-## Additional Notes
-
-- Windows users must escape quotes and backslashes within the JSON file parameter structure:
-`.\\arelleCmdLine.exe --plugins inlineXbrlDocumentSet --file "[{""ixds"":[{""file"":""C:\\\\filing-documents.zip""}], ""ixdsTarget"":""DKGAAP""}]" --package "C:\\taxonomy-package.zip"`
-- If a JSON structure is specified in the `--file` option without an `ixdsTarget`, the default target is assumed.
-- To specify a non-default target in the absence of a JSON file argument, use the formula parameter `ixdsTarget`.
-- For EDGAR style encoding of non-ASCII characters, use the `--encodeSavedXmlChars` argument.
-- Extracted XML instance is saved to the same directory as the IXDS with the suffix `_extracted.xbrl`.
-"""
 import os
 import zipfile
 from collections import defaultdict
-from optparse import SUPPRESS_HELP
-from typing import Type
 
 from lxml.etree import XML, XMLSyntaxError
 
-from arelle import ValidateDuplicateFacts, FileSource, ModelXbrl, ValidateXbrlDimensions, XbrlConst
+from arelle import ValidateDuplicateFacts, ModelXbrl, ValidateXbrlDimensions, XbrlConst
+from arelle.ModelDocument import Type
 from arelle.ModelInstanceObject import ModelInlineFootnote
-from arelle.ModelObject import ModelObject
 from arelle.ModelValue import INVALIDixVALUE, qname
 from arelle.PluginManager import pluginClassMethods
-from arelle.PrototypeDtsObject import LocPrototype, ArcPrototype
+from arelle.PrototypeDtsObject import ArcPrototype, LocPrototype
 from arelle.RuntimeOptions import RuntimeOptions
 from arelle.UrlUtil import isHttpUrl
 from arelle.ValidateDuplicateFacts import DeduplicationType
 from arelle.ValidateFilingText import CDATApattern
-from arelle.XmlUtil import xmlnsprefix, addChild, setXmlns, elementFragmentIdentifier, copyIxFootnoteHtml
-from arelle.XmlValidate import VALID, NONE
-from arelle.XmlValidate import validate as xmlValidate
-
-
-DEFAULT_TARGET = "(default)"
-IXDS_SURROGATE = "_IXDS#?#"  # surrogate (fake) file name for inline XBRL doc set (IXDS)
-IXDS_DOC_SEPARATOR = "#?#"  # the files of the document set follow the above "surrogate" with these separators
-MINIMUM_IXDS_DOC_COUNT = 2  # make this 2 to cause single-documents to be processed without a document set object
-
-_skipExpectedInstanceComparison = None
+from arelle.XmlUtil import addChild, copyIxFootnoteHtml, setXmlns, xmlnsprefix, elementFragmentIdentifier
+from arelle.XmlValidateConst import NONE, VALID
+from arelle.inline.InlineConstants import IXDS_DOC_SEPARATOR
 
 
 # baseXmlLang: set on root xbrli:xbrl element
@@ -342,56 +254,6 @@ def _saveTargetInstanceOverriden(deduplicationType: DeduplicationType | None) ->
     return False
 
 
-def addInlineCommandLineOptions(parser):
-    # extend command line options with a save DTS option
-    parser.add_option("--saveInstance",
-                      action="store_true",
-                      dest="saveTargetInstance",
-                      help=_("Save target instance document"))
-    parser.add_option("--saveinstance",  # for WEB SERVICE use
-                      action="store_true",
-                      dest="saveTargetInstance",
-                      help=SUPPRESS_HELP)
-    parser.add_option("--saveFiling",
-                      action="store",
-                      dest="saveTargetFiling",
-                      help=_("Save instance and DTS in zip"))
-    parser.add_option("--savefiling",  # for WEB SERVICE use
-                      action="store",
-                      dest="saveTargetFiling",
-                      help=SUPPRESS_HELP)
-    parser.add_option("--skipExpectedInstanceComparison",
-                      action="store_true",
-                      dest="skipExpectedInstanceComparison",
-                      help=_("Skip inline XBRL testcases from comparing expected result instances"))
-    parser.add_option("--encodeSavedXmlChars",
-                      action="store_true",
-                      dest="encodeSavedXmlChars",
-                      help=_("Encode saved xml characters (&#x80; and above)"))
-    parser.add_option("--encodesavedxmlchars",  # for WEB SERVICE use
-                      action="store_true",
-                      dest="encodeSavedXmlChars",
-                      help=SUPPRESS_HELP)
-    parser.add_option("--xbrliNamespacePrefix",
-                      action="store",
-                      dest="xbrliNamespacePrefix",
-                      help=_("The namespace prefix to use for http://www.xbrl.org/2003/instance. It's used as the default namespace when unset."),
-                      type="string")
-    parser.add_option("--xbrlinamespaceprefix",  # for WEB SERVICE use
-                      action="store",
-                      dest="xbrliNamespacePrefix",
-                      help=SUPPRESS_HELP,
-                      type="string")
-    parser.add_option("--deduplicateIxbrlFacts",
-                      action="store",
-                      choices=[a.value for a in ValidateDuplicateFacts.DeduplicationType],
-                      dest="deduplicateIxbrlFacts",
-                      help=_("Remove duplicate facts when extracting XBRL instance."))
-    parser.add_option("--deduplicateixbrlfacts",  # for WEB SERVICE use
-                      action="store",
-                      choices=[a.value for a in ValidateDuplicateFacts.DeduplicationType],
-                      dest="deduplicateIxbrlFacts",
-                      help=SUPPRESS_HELP)
 
 
 def extractTargetDocumentFromIxds(cntlr, options: RuntimeOptions):
@@ -411,125 +273,6 @@ def extractTargetDocumentFromIxds(cntlr, options: RuntimeOptions):
                        encodeSavedXmlChars=getattr(options, "encodeSavedXmlChars", False),
                        xbrliNamespacePrefix=getattr(options, "xbrliNamespacePrefix"),
                        deduplicationType=deduplicationType)
-
-
-def discoverInlineDocset(entrypointFiles): # [{"file":"url1"}, ...]
-    if len(entrypointFiles): # return [{"ixds":[{"file":"url1"}, ...]}]
-        # replace contents of entrypointFiles (array object), don't return a new object
-        _entrypointFiles = entrypointFiles.copy()
-        del entrypointFiles[:]
-        entrypointFiles.append( {"ixds": _entrypointFiles} )
-
-
-def getInlineReadMeFirstUris(modelTestcaseVariation):
-    _readMeFirstUris = [os.path.join(modelTestcaseVariation.modelDocument.filepathdir,
-                                     (elt.get("{http://www.w3.org/1999/xlink}href") or elt.text).strip())
-                        for elt in modelTestcaseVariation.iterdescendants()
-                        if isinstance(elt,ModelObject) and elt.get("readMeFirst") == "true"]
-    if len(_readMeFirstUris) >= MINIMUM_IXDS_DOC_COUNT and all(
-            Type.identify(modelTestcaseVariation.modelXbrl.fileSource, f) == Type.INLINEXBRL for f in _readMeFirstUris):
-        docsetSurrogatePath = os.path.join(os.path.dirname(_readMeFirstUris[0]), IXDS_SURROGATE)
-        modelTestcaseVariation._readMeFirstUris = [docsetSurrogatePath + IXDS_DOC_SEPARATOR.join(_readMeFirstUris)]
-        return True
-
-
-def getReportPackageIxds(filesource, lookOutsideReportsDirectory=False, combineIntoSingleIxds=False):
-    # single report directory
-    reportFiles = []
-    ixdsDirFiles = defaultdict(list)
-    reportDir = "*uninitialized*"
-    reportDirLen = 0
-    for f in filesource.dir:
-        if f.endswith("/reports/") and reportDir == "*uninitialized*":
-            reportDir = f
-            reportDirLen = len(f)
-        elif f.startswith(reportDir):
-            if "/" not in f[reportDirLen:]:
-                filesource.select(f)
-                if Type.identify(filesource, filesource.url) in (Type.INSTANCE, Type.INLINEXBRL):
-                    reportFiles.append(f)
-            else:
-                ixdsDir, _sep, ixdsFile = f.rpartition("/")
-                if ixdsFile:
-                    filesource.select(f)
-                    if Type.identify(filesource, filesource.url) == Type.INLINEXBRL:
-                        ixdsDirFiles[ixdsDir].append(f)
-    if lookOutsideReportsDirectory:
-        for f in filesource.dir:
-            filesource.select(f)
-            if Type.identify(filesource, filesource.url) in (Type.INSTANCE, Type.INLINEXBRL):
-                reportFiles.append(f)
-    if combineIntoSingleIxds and (reportFiles or len(ixdsDirFiles) > 1):
-        docsetSurrogatePath = os.path.join(filesource.baseurl, IXDS_SURROGATE)
-        for ixdsFiles in ixdsDirFiles.values():
-            reportFiles.extend(ixdsFiles)
-        return docsetSurrogatePath + IXDS_DOC_SEPARATOR.join(os.path.join(filesource.baseurl,f) for f in reportFiles)
-    for ixdsDir, ixdsFiles in sorted(ixdsDirFiles.items()):
-        # use the first ixds in report package
-        docsetSurrogatePath = os.path.join(filesource.baseurl, ixdsDir, IXDS_SURROGATE)
-        return docsetSurrogatePath + IXDS_DOC_SEPARATOR.join(os.path.join(filesource.baseurl,f) for f in ixdsFiles)
-    for f in reportFiles:
-        filesource.select(f)
-        if Type.identify(filesource, filesource.url) in (Type.INSTANCE, Type.INLINEXBRL):
-            # return the first inline doc
-            return f
-    return None
-
-
-def isActive():
-    return True  # TODO
-
-
-def loadDTS(modelXbrl, modelIxdsDocument):
-    for htmlElt in modelXbrl.ixdsHtmlElements:
-        for ixRefElt in htmlElt.iterdescendants(tag=htmlElt.modelDocument.ixNStag + "references"):
-            if ixRefElt.get("target") == modelXbrl.ixdsTarget:
-                modelIxdsDocument.schemaLinkbaseRefsDiscover(ixRefElt)
-                xmlValidate(modelXbrl, ixRefElt) # validate instance elements
-
-
-def prepareInlineEntrypointFiles(cntlr, options, entrypointFiles):
-    global _skipExpectedInstanceComparison
-    _skipExpectedInstanceComparison = getattr(options, "skipExpectedInstanceComparison", False)
-    if isinstance(entrypointFiles, list):
-        # check for any inlineDocumentSet in list
-        for entrypointFile in entrypointFiles:
-            _ixds = entrypointFile.get("ixds")
-            if isinstance(_ixds, list):
-                # build file surrogate for inline document set
-                _files = [e["file"] for e in _ixds if isinstance(e, dict)]
-                if len(_files) == 1:
-                    urlsByType = {}
-                    if os.path.isfile(_files[0]) and any(_files[0].endswith(e) for e in (".zip", ".ZIP", ".tar.gz" )): # check if an archive file
-                        filesource = FileSource.openFileSource(_files[0], cntlr)
-                        if filesource.isArchive:
-                            for _archiveFile in (filesource.dir or ()): # .dir might be none if IOerror
-                                filesource.select(_archiveFile)
-                                identifiedType = Type.identify(filesource, filesource.url)
-                                if identifiedType in (Type.INSTANCE, Type.INLINEXBRL):
-                                    urlsByType.setdefault(identifiedType, []).append(filesource.url)
-                        filesource.close()
-                    elif os.path.isdir(_files[0]):
-                        _fileDir = _files[0]
-                        for _localName in os.listdir(_fileDir):
-                            _file = os.path.join(_fileDir, _localName)
-                            if os.path.isfile(_file):
-                                filesource = FileSource.openFileSource(_file, cntlr)
-                                identifiedType = Type.identify(filesource, filesource.url)
-                                if identifiedType in (Type.INSTANCE, Type.INLINEXBRL):
-                                    urlsByType.setdefault(identifiedType, []).append(filesource.url)
-                                filesource.close()
-                    if urlsByType:
-                        _files = []
-                        # use inline instances, if any, else non-inline instances
-                        for identifiedType in (Type.INLINEXBRL, Type.INSTANCE):
-                            for url in urlsByType.get(identifiedType, []):
-                                _files.append(url)
-                            if _files:
-                                break # found inline (or non-inline) entrypoint files, don't look for any other type
-                if len(_files) > 0:
-                    docsetSurrogatePath = os.path.join(os.path.dirname(_files[0]), IXDS_SURROGATE)
-                    entrypointFile["file"] = docsetSurrogatePath + IXDS_DOC_SEPARATOR.join(_files)
 
 
 def saveTargetDocument(
@@ -584,15 +327,10 @@ def saveTargetDocument(
             filingZip = None
             filingFiles = None
         _saveTargetDocument(modelDocument.modelXbrl, targetFilename, targetSchemaRefs, filingZip, filingFiles,
-                           encodeSavedXmlChars=encodeSavedXmlChars, xbrliNamespacePrefix=xbrliNamespacePrefix,
-                           deduplicationType=deduplicationType)
+                            encodeSavedXmlChars=encodeSavedXmlChars, xbrliNamespacePrefix=xbrliNamespacePrefix,
+                            deduplicationType=deduplicationType)
         if saveTargetFiling:
             instDir = os.path.dirname(modelDocument.uri.split(IXDS_DOC_SEPARATOR)[0])
             for refFile in filingFiles:
                 if refFile.startswith(instDir):
                     filingZip.write(refFile, modelDocument.relativeUri(refFile))
-
-
-def skipExpectedInstanceComparison():
-    global _skipExpectedInstanceComparison
-    return bool(_skipExpectedInstanceComparison)

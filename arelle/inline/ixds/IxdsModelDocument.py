@@ -1,11 +1,12 @@
 """
 See COPYRIGHT.md for copyright information.
 """
-from arelle.ModelDocument import ModelDocument, ModelDocumentReference, load
+from arelle.ModelDocument import ModelDocument, load
+from arelle.ModelDocumentReference import ModelDocumentReference
 
 
 # class representing surrogate object for multi-document inline xbrl document set, references individual ix documents
-class ModelInlineXbrlDocumentSet(ModelDocument):
+class IxdsModelDocument(ModelDocument):
 
     def discoverInlineXbrlDocumentSet(self):
         # for JP FSA inline document set manifest, acting as document set surrogate entry object, load referenced ix documents

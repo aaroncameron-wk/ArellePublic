@@ -8,8 +8,7 @@ import regex as re
 from arelle import FileSource
 from arelle.CntlrCmdLine import filesourceEntrypointFiles
 from arelle.FileSource import archiveFilenameSuffixes, archiveFilenameParts
-from arelle.inline import saveTargetDocument, IXDS_DOC_SEPARATOR, IXDS_SURROGATE, MINIMUM_IXDS_DOC_COUNT
-
+from arelle.inline.InlineConstants import IXDS_SURROGATE, IXDS_DOC_SEPARATOR, MINIMUM_IXDS_DOC_COUNT
 
 DialogURL = None  # dynamically imported when first used
 
@@ -25,13 +24,6 @@ def fileOpenMenuEntender(cntlr, menu, *args, **kwargs):
     menu.insert_command(2, label="Open File Inline Doc Set",
                         underline=0,
                         command=lambda: runOpenFileInlineDocumentSetMenuCommand(cntlr, runInBackground=True) )
-
-
-def saveTargetDocumentMenuEntender(cntlr, menu, *args, **kwargs):
-    # Extend menu with an item for the savedts plugin
-    menu.add_command(label="Save target document",
-                     underline=0,
-                     command=lambda: saveTargetDocument(cntlr, runInBackground=True) )
 
 
 def runOpenFileInlineDocumentSetMenuCommand(cntlr, runInBackground=False, saveTargetFiling=False):

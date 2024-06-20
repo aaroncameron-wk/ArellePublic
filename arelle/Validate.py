@@ -21,6 +21,7 @@ from arelle.ModelRelationshipSet import ModelRelationshipSet
 from arelle.ModelTestcaseObject import testcaseVariationsByTarget, ModelTestcaseVariation
 from arelle.ModelValue import (qname, QName)
 from arelle.PluginManager import pluginClassMethods
+from arelle.inline.ixds import IxdsValidation
 from arelle.rendering import RenderingEvaluator
 from arelle.XmlUtil import collapseWhitespace, xmlstring
 
@@ -294,9 +295,9 @@ class Validate:
                                         entrypoints = filesourceEntrypointFiles(filesource)
                                         if entrypoints:
                                             # resolve an IXDS in entrypoints
+                                            IxdsValidation.setSkipExpectedInstanceComparison(True)
                                             inline.prepareInlineEntrypointFiles(
                                                 self.modelXbrl.modelManager.cntlr,
-                                                attrdict(skipExpectedInstanceComparison=True),
                                                 entrypoints
                                             )
                                             for pluginXbrlMethod in pluginClassMethods("ModelTestcaseVariation.ArchiveIxds"):

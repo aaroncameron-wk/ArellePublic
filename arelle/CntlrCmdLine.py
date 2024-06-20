@@ -14,6 +14,8 @@ from arelle import (Cntlr, FileSource, ModelDocument, XmlUtil, XbrlConst, Versio
                     ViewFileDTS, ViewFileFactList, ViewFileFactTable, ViewFileConcepts,
                     ViewFileFormulae, ViewFileRelationshipSet, ViewFileTests, ViewFileRssFeed,
                     ViewFileRoleTypes)
+from arelle.inline.extraction import InlineExtractionCli, InlineExtraction
+from arelle.inline.ixds import IxdsValidation, IxdsCli, IxdsLoader
 from arelle.oim.xml.Save import saveOimReportToXmlInstance
 from arelle.rendering import RenderingEvaluator
 from arelle.RuntimeOptions import RuntimeOptions, RuntimeOptionsException
@@ -387,7 +389,8 @@ def parseArgs(args):
                         arellePluginModules[cmd] = moduleInfo
                         PluginManager.reset()
             break
-    inline.addInlineCommandLineOptions(parser)
+    InlineExtractionCli.addInlineCommandLineOptions(parser)
+    IxdsCli.addInlineCommandLineOptions(parser)
     # add plug-in options
     for optionsExtender in pluginClassMethods("CntlrCmdLine.Options"):
         optionsExtender(parser)
@@ -561,7 +564,7 @@ def filesourceEntrypointFiles(filesource, entrypointFiles=[], inlineOnly=False):
                 entrypointFiles.append({"file":url})
             if entrypointFiles:
                 if identifiedType == ModelDocument.Type.INLINEXBRL:
-                    inline.discoverInlineDocset(entrypointFiles)
+                    IxdsLoader.discoverInlineDocset(entrypointFiles)
                 break # found inline (or non-inline) entrypoint files, don't look for any other type
         # for ESEF non-consolidated xhtml documents accept an xhtml entry point
         if not entrypointFiles and not inlineOnly:
@@ -960,8 +963,8 @@ class CntlrCmdLine(Cntlr.Cntlr):
         if filesource and not filesource.selection:
             if not (sourceZipStream and len(_entrypointFiles) > 0):
                 filesourceEntrypointFiles(filesource, _entrypointFiles)
-
-        inline.prepareInlineEntrypointFiles(self, options, _entrypointFiles)
+        IxdsValidation.setSkipExpectedInstanceComparison(options.skipExpectedInstanceComparison)
+        IxdsLoader.prepareInlineEntrypointFiles(self, _entrypointFiles)
         for pluginXbrlMethod in pluginClassMethods("CntlrCmdLine.Filing.Start"):
             pluginXbrlMethod(self, options, filesource, _entrypointFiles, sourceZipStream=sourceZipStream, responseZipStream=responseZipStream)
         for _entrypoint in _entrypointFiles:
@@ -1129,7 +1132,7 @@ class CntlrCmdLine(Cntlr.Cntlr):
                         if options.arcroleTypesFile:
                             ViewFileRoleTypes.viewRoleTypes(modelXbrl, options.arcroleTypesFile, "Arcrole Types", isArcrole=True, lang=options.labelLang)
                         if options.saveTargetInstance or options.saveTargetFiling:
-                            inline.extractTargetDocumentFromIxds(self, options)
+                            InlineExtraction.extractTargetDocumentFromIxds(self, options)
                         for pluginXbrlMethod in pluginClassMethods("CntlrCmdLine.Xbrl.Run"):
                             pluginXbrlMethod(self, options, modelXbrl, _entrypoint, responseZipStream=responseZipStream)
 

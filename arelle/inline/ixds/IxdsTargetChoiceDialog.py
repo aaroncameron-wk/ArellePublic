@@ -4,7 +4,7 @@ See COPYRIGHT.md for copyright information.
 import regex as re
 
 
-class TargetChoiceDialog:
+class IxdsTargetChoiceDialog:
     def __init__(self,parent, choices):
         from tkinter import Toplevel, Label, Listbox, StringVar
         parentGeometry = re.match(r"(\d+)x(\d+)[+]?([-]?\d+)[+]?([-]?\d+)", parent.geometry())

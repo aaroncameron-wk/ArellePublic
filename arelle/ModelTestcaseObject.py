@@ -5,9 +5,10 @@ import os, io, logging
 from collections import defaultdict
 from typing import Optional
 
-from arelle import XmlUtil, XbrlConst, ModelValue, inline
+from arelle import XmlUtil, XbrlConst, ModelValue
 from arelle.ModelObject import ModelObject
 from arelle.PluginManager import pluginClassMethods
+from arelle.inline.ixds import IxdsValidation
 
 TXMY_PKG_SRC_ELTS = ("metadata", "catalog", "taxonomy")
 
@@ -104,7 +105,7 @@ class ModelTestcaseVariation(ModelObject):
             self._readMeFirstUris = []
             self.readMeFirstElements = []
             # first look if any plugin method to get readme first URIs
-            if not inline.getInlineReadMeFirstUris(self) and \
+            if not IxdsValidation.getInlineReadMeFirstUris(self) and \
                     not any(pluginXbrlMethod(self)
                        for pluginXbrlMethod in pluginClassMethods("ModelTestcaseVariation.ReadMeFirstUris")):
                 if self.localName == "testGroup":  #w3c testcase
@@ -187,7 +188,7 @@ class ModelTestcaseVariation(ModelObject):
 
     @property
     def resultXbrlInstanceUri(self):
-        if inline.skipExpectedInstanceComparison():
+        if IxdsValidation.skipExpectedInstanceComparison():
             return None
         for pluginXbrlMethod in pluginClassMethods("ModelTestcaseVariation.ResultXbrlInstanceUri"):
             resultInstanceUri = pluginXbrlMethod(self)
