@@ -35,9 +35,9 @@ class EntryPointFactory:
         """
         global _entryPointRefCache
         if _entryPointRefCache is None:
-            assert self._plugin_context.pluginBase is not None
+            assert self._plugin_context.plugin_base is not None
             _entryPointRefCache = \
-                self._discover_built_in([], cast(str, self._plugin_context.pluginBase)) + \
+                self._discover_built_in([], cast(str, self._plugin_context.plugin_base)) + \
                 self._discover_installed()
         return _entryPointRefCache
 
@@ -95,13 +95,13 @@ class EntryPointFactory:
         """
         moduleFilename = self._plugin_context.controller.webCache.getfilename(filepath)
         if moduleFilename:
-            moduleFilename = self._plugin_context.normalizeModuleFilename(moduleFilename)
+            moduleFilename = self._plugin_context.normalize_module_filename(moduleFilename)
         aliases = set()
         if entryPoint:
             aliases.add(entryPoint.name)
         moduleInfo: dict | None = None
         if moduleFilename:
-            moduleInfo = self._plugin_context.parsePluginInfo(moduleFilename, moduleFilename, entryPoint)
+            moduleInfo = self._plugin_context.parse_plugin_info(moduleFilename, moduleFilename, entryPoint)
             if moduleInfo is None:
                 return None
             if "name" in moduleInfo:
@@ -167,8 +167,8 @@ class EntryPointFactory:
         :return: A module inforomation dictionary
         """
         if entry_point_ref is not None:
-            return self._plugin_context.moduleModuleInfo(entryPoint=entry_point_ref.entryPoint)
-        return self._plugin_context.moduleModuleInfo(moduleURL=filename)
+            return self._plugin_context.module_module_info(entryPoint=entry_point_ref.entryPoint)
+        return self._plugin_context.module_module_info(moduleURL=filename)
 
     def get(self, search: str) -> EntryPointRef | None:
         """
