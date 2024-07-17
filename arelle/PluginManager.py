@@ -7,6 +7,7 @@ from collections.abc import Callable
 from importlib.metadata import EntryPoint
 from typing import TYPE_CHECKING, Any, Iterator
 
+from .core.plugins.CorePluginContext import CorePluginContext
 from .services.plugins.PluginContext import PluginContext
 
 if TYPE_CHECKING:
@@ -27,7 +28,8 @@ def close():  # close all loaded methods
 
 def init(cntlr: Cntlr, loadPluginConfig: bool = True) -> None:
     global _GLOBAL_PLUGIN_CONTEXT
-    _GLOBAL_PLUGIN_CONTEXT = PluginContext(cntlr)
+    if _GLOBAL_PLUGIN_CONTEXT is None:
+        _GLOBAL_PLUGIN_CONTEXT = CorePluginContext(cntlr)
     _GLOBAL_PLUGIN_CONTEXT.init(loadPluginConfig)
 
 
