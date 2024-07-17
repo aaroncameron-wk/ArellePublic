@@ -1,9 +1,15 @@
 """
 See COPYRIGHT.md for copyright information.
 """
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from importlib.metadata import EntryPoint
-from typing import Any, Iterator, Callable
+from typing import Any, Iterator, Callable, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from arelle.Cntlr import Cntlr
+
 
 
 class PluginContext(ABC):
@@ -13,7 +19,7 @@ class PluginContext(ABC):
         pass
 
     @abstractmethod
-    def close(self):
+    def close(self) -> None:
         pass
 
     @abstractmethod
@@ -23,15 +29,15 @@ class PluginContext(ABC):
             entryPoint: EntryPoint | None = None,
             reload: bool = False,
             parentImportsSubtree: bool = False,
-    ) -> dict | None:
+    ) -> dict[str, Any] | None:
         pass
 
     @abstractmethod
-    def get_controller(self):
+    def get_controller(self) -> Cntlr:
         pass
 
     @abstractmethod
-    def get_plugin_base(self):
+    def get_plugin_base(self) -> str:
         pass
 
     @abstractmethod
@@ -39,7 +45,7 @@ class PluginContext(ABC):
         pass
 
     @abstractmethod
-    def modules_with_newer_file_dates(self):
+    def modules_with_newer_file_dates(self) -> list[str]:
         pass
 
     @abstractmethod
@@ -52,7 +58,7 @@ class PluginContext(ABC):
             moduleURL: str,
             moduleFilename: str,
             entryPoint: EntryPoint | None,
-    ) -> dict | None:
+    ) -> dict[str, Any] | None:
         pass
 
     @abstractmethod
@@ -72,5 +78,5 @@ class PluginContext(ABC):
         pass
 
     @abstractmethod
-    def save(self, cntlr) -> None:
+    def save(self, cntlr: Cntlr) -> None:
         pass

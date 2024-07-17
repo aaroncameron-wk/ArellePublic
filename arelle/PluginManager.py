@@ -7,13 +7,10 @@ from collections.abc import Callable
 from importlib.metadata import EntryPoint
 from typing import TYPE_CHECKING, Any, Iterator
 
-from .core.plugins.CorePluginContext import CorePluginContext
-from .services.plugins.PluginContext import PluginContext
-
 if TYPE_CHECKING:
     from .Cntlr import Cntlr
 
-_GLOBAL_PLUGIN_CONTEXT: PluginContext | None = None
+_GLOBAL_PLUGIN_CONTEXT = None
 
 
 def addPluginModule(name: str) -> dict[str, Any] | None:
@@ -29,6 +26,7 @@ def close():  # close all loaded methods
 def init(cntlr: Cntlr, loadPluginConfig: bool = True) -> None:
     global _GLOBAL_PLUGIN_CONTEXT
     if _GLOBAL_PLUGIN_CONTEXT is None:
+        from .core.plugins.CorePluginContext import CorePluginContext
         _GLOBAL_PLUGIN_CONTEXT = CorePluginContext(cntlr)
     _GLOBAL_PLUGIN_CONTEXT.init(loadPluginConfig)
 

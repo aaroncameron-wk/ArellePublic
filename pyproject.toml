@@ -288,6 +288,8 @@ module = [
     'arelle.archive.plugin.validate.calc2',
     'arelle.archive.plugin.validateSchemaLxml',
     'arelle.archive.plugin.validateTableInfoset',
+    'arelle.core.plugins.CoreEntryPointRefFactory',
+    'arelle.core.plugins.CorePluginContext',
     'arelle.examples.plugin.formulaSuiteConverter',
     'arelle.examples.plugin.functionsCustom',
     'arelle.examples.plugin.hello_dolly',

@@ -6,11 +6,10 @@ based on pull request 4
 '''
 from __future__ import annotations
 
-from importlib.metadata import EntryPoint
 from tkinter import Toplevel, font, messagebox, VERTICAL, HORIZONTAL, N, S, E, W
 from tkinter.constants import DISABLED, ACTIVE
 
-from arelle.PluginManager import EntryPointRef
+from arelle.services.plugins.EntryPointRef import EntryPointRef
 
 try:
     from tkinter.ttk import Treeview, Scrollbar, Frame, Label, Button
