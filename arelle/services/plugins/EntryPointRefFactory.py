@@ -6,12 +6,13 @@ from __future__ import annotations
 import os
 import sys
 from collections import defaultdict
-from dataclasses import dataclass
 from importlib.metadata import EntryPoint, entry_points
 from typing import cast, TYPE_CHECKING
 
+from arelle.services.plugins.EntryPointRef import EntryPointRef
+
 if TYPE_CHECKING:
-    from arelle.PluginContext import PluginContext
+    from arelle.services.plugins.PluginContext import PluginContext
 
 
 _entryPointRefCache: list[EntryPointRef] | None = None
@@ -23,7 +24,7 @@ _entryPointRefSearchTermEndings = [
 ]
 
 
-class EntryPointFactory:
+class EntryPointRefFactory:
 
     def __init__(self, plugin_context: PluginContext):
         self._plugin_context = plugin_context
@@ -109,7 +110,7 @@ class EntryPointFactory:
             if "aliases" in moduleInfo:
                 aliases |= set(moduleInfo["aliases"])
         return EntryPointRef(
-            aliases={EntryPointFactory._normalize_plugin_search_term(a) for a in aliases},
+            aliases={EntryPointRefFactory._normalize_plugin_search_term(a) for a in aliases},
             entryPoint=entryPoint,
             moduleFilename=moduleFilename,
             moduleInfo=moduleInfo,
@@ -141,7 +142,7 @@ class EntryPointFactory:
                 for alias in entryPointRef.aliases:
                     entryPointRefAliasCache[alias].append(entryPointRef)
             _entryPointRefAliasCache = entryPointRefAliasCache
-        search = EntryPointFactory._normalize_plugin_search_term(search)
+        search = EntryPointRefFactory._normalize_plugin_search_term(search)
         return _entryPointRefAliasCache.get(search, [])
 
     @staticmethod
@@ -167,8 +168,8 @@ class EntryPointFactory:
         :return: A module inforomation dictionary
         """
         if entry_point_ref is not None:
-            return self._plugin_context.module_module_info(entryPoint=entry_point_ref.entryPoint)
-        return self._plugin_context.module_module_info(moduleURL=filename)
+            return self._plugin_context.generate_module_info(entryPoint=entry_point_ref.entryPoint)
+        return self._plugin_context.generate_module_info(moduleURL=filename)
 
     def get(self, search: str) -> EntryPointRef | None:
         """
@@ -185,11 +186,3 @@ class EntryPointFactory:
             paths = [r.moduleFilename for r in entryPointRefs]
             raise Exception(_('Multiple entry points matched search term "{}": {}').format(search, paths))
         return entryPointRefs[0]
-
-
-@dataclass
-class EntryPointRef:
-    aliases: set[str]
-    entryPoint: EntryPoint | None
-    moduleFilename: str | None
-    moduleInfo: dict | None

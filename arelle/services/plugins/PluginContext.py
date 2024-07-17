@@ -21,12 +21,12 @@ from pathlib import Path
 from typing import Any, Iterator, Callable, TYPE_CHECKING
 
 from arelle import FileSource
-from arelle.EntryPointRef import EntryPointFactory
 from arelle.Locale import getLanguageCodes
 from arelle.UrlUtil import isAbsolute
+from arelle.services.plugins.EntryPointRefFactory import EntryPointRefFactory
 
 if TYPE_CHECKING:
-    from .Cntlr import Cntlr
+    from arelle.Cntlr import Cntlr
 
 _ERROR_MESSAGE_IMPORT_TEMPLATE = "Unable to load module {}"
 PLUGIN_TRACE_FILE: str | None = None  # "c:/temp/pluginerr.txt"
@@ -109,7 +109,7 @@ class PluginContext:
         self._module_plugin_infos = {}
         self._methods = {}
         self._plugin_base = None
-        self._entry_point_factory = EntryPointFactory(self)
+        self._entry_point_ref_factory = EntryPointRefFactory(self)
 
     def init(self, loadPluginConfig: bool = True) -> None:
         if PLUGIN_TRACE_FILE:
@@ -127,7 +127,7 @@ class PluginContext:
                 self._json_file = self._controller.userAppDir + os.sep + "plugins.json"
                 with io.open(self._json_file, 'rt', encoding='utf-8') as f:
                     self._plugin_config = json.load(f)
-                self.freshen_module_infos()
+                self._freshen_module_infos()
             except Exception:
                 pass  # on GAE no userAppDir, will always come here
         if not self._plugin_config:
@@ -145,7 +145,7 @@ class PluginContext:
         if self._methods:
             self._methods.clear()  # dict by class of list of ordered callable function objects
 
-    def ordered_plugin_config(self):
+    def _ordered_plugin_config(self):
         index_map = {
             'name': '01',
             'status': '02',
@@ -178,7 +178,7 @@ class PluginContext:
         if self._plugin_config_changed and cntlr.hasFileSystem and not cntlr.disablePersistentConfig:
             self._json_file = cntlr.userAppDir + os.sep + "plugins.json"
             with io.open(self._json_file, 'wt', encoding='utf-8') as f:
-                jsonStr = str(json.dumps(self.ordered_plugin_config(), ensure_ascii=False, indent=2))  # might not be unicode in 2.7
+                jsonStr = str(json.dumps(self._ordered_plugin_config(), ensure_ascii=False, indent=2))  # might not be unicode in 2.7
                 f.write(jsonStr)
             self._plugin_config_changed = False
 
@@ -187,7 +187,7 @@ class PluginContext:
         self._module_plugin_infos.clear()
         self._methods.clear()
 
-    def log_plugin_trace(self, message: str, level: int) -> None:
+    def _log_plugin_trace(self, message: str, level: int) -> None:
         """
         If plugin trace file logging is configured, logs `message` to it.
         Only logs to controller logger if log is an error.
@@ -215,13 +215,13 @@ class PluginContext:
                 else:
                     _msg = _("File not found for '{name}' plug-in when checking for updated module info. Path: '{path}'") \
                         .format(name=moduleName, path=freshenedFilename)
-                    self.log_plugin_trace(_msg, logging.ERROR)
+                    self._log_plugin_trace(_msg, logging.ERROR)
             except Exception as err:
                 _msg = _("Exception at plug-in method modulesWithNewerFileDates: {error}").format(error=err)
-                self.log_plugin_trace(_msg, logging.ERROR)
+                self._log_plugin_trace(_msg, logging.ERROR)
         return names
 
-    def freshen_module_infos(self):
+    def _freshen_module_infos(self):
         # for modules with different date-times, re-load module info
         missingEnabledModules = []
         for moduleName, moduleInfo in self._plugin_config["modules"].items():
@@ -235,7 +235,7 @@ class PluginContext:
                     freshenedFilename += ".py"  # extension module without .py suffix
                 if os.path.exists(freshenedFilename):
                     if moduleInfo["fileDate"] != time.strftime('%Y-%m-%dT%H:%M:%S UTC', time.gmtime(os.path.getmtime(freshenedFilename))):
-                        freshenedModuleInfo = self.module_module_info(moduleURL=moduleInfo["moduleURL"], reload=True)
+                        freshenedModuleInfo = self.generate_module_info(moduleURL=moduleInfo["moduleURL"], reload=True)
                         if freshenedModuleInfo is not None:
                             if freshenedModuleInfo["name"] == moduleName:
                                 self._plugin_config["modules"][moduleName] = freshenedModuleInfo
@@ -249,20 +249,20 @@ class PluginContext:
                 else:
                     _msg = _("File not found for '{name}' plug-in when attempting to update module info. Path: '{path}'") \
                         .format(name=moduleName, path=freshenedFilename)
-                    self.log_plugin_trace(_msg, logging.ERROR)
+                    self._log_plugin_trace(_msg, logging.ERROR)
             except Exception as err:
                 _msg = _("Exception at plug-in method freshen_module_infos: {error}").format(error=err)
-                self.log_plugin_trace(_msg, logging.ERROR)
+                self._log_plugin_trace(_msg, logging.ERROR)
         for moduleName in missingEnabledModules:
             self.remove_plugin_module(moduleName)
             # Try re-adding plugin modules by name (for plugins that moved from built-in to pip installed)
             moduleInfo = self.add_plugin_module(moduleName)
             if moduleInfo:
                 self._plugin_config["modules"][moduleInfo["name"]] = moduleInfo
-                self.load_module(moduleInfo)
-                self.log_plugin_trace(_("Reloaded plugin that failed loading: {} {}").format(moduleName, moduleInfo), logging.INFO)
+                self._load_module(moduleInfo)
+                self._log_plugin_trace(_("Reloaded plugin that failed loading: {} {}").format(moduleName, moduleInfo), logging.INFO)
             else:
-                self.log_plugin_trace(_("Removed plugin that failed loading (plugin may have been archived): {}").format(moduleName), logging.ERROR)
+                self._log_plugin_trace(_("Removed plugin that failed loading (plugin may have been archived): {}").format(moduleName), logging.ERROR)
         self.save(self._controller)
 
     @property
@@ -300,7 +300,7 @@ class PluginContext:
                 return pyPath
         return None
 
-    def get_module_filename(self, moduleURL: str, reload: bool, normalize: bool, base: str | None) -> tuple[str | None, EntryPoint | None]:
+    def _get_module_filename(self, moduleURL: str, reload: bool, normalize: bool, base: str | None) -> tuple[str | None, EntryPoint | None]:
         # TODO several directories, eg User Application Data
         moduleFilename = self._controller.webCache.getfilename(moduleURL, reload=reload, normalize=normalize, base=base)
         if moduleFilename:
@@ -311,7 +311,7 @@ class PluginContext:
                 return moduleFilename, None
         # `moduleFilename` did not map to a local filepath or did not normalize to a script
         # Try using `moduleURL` to search for pip-installed entry point
-        entryPointRef = self._entry_point_factory.get(moduleURL)
+        entryPointRef = self._entry_point_ref_factory.get(moduleURL)
         if entryPointRef is not None:
             return entryPointRef.moduleFilename, entryPointRef.entryPoint
         return None, None
@@ -411,7 +411,7 @@ class PluginContext:
         f.close()
         return moduleInfo if isPlugin else None
 
-    def module_module_info(self, moduleURL: str | None = None, entryPoint: EntryPoint | None = None, reload: bool = False, parentImportsSubtree: bool = False) -> dict | None:
+    def generate_module_info(self, moduleURL: str | None = None, entryPoint: EntryPoint | None = None, reload: bool = False, parentImportsSubtree: bool = False) -> dict | None:
         """
         Generates a module info dict based on the provided `moduleURL` or `entryPoint`
         Exactly one of "moduleURL" or "entryPoint" must be provided, otherwise a RuntimeError will be thrown.
@@ -437,11 +437,11 @@ class PluginContext:
             moduleFilename = moduleURL = entryPoint.load()()
         else:
             # Otherwise, we will verify the path before continuing
-            moduleFilename, entryPoint = self.get_module_filename(moduleURL, reload=reload, normalize=True, base=self._plugin_base)
+            moduleFilename, entryPoint = self._get_module_filename(moduleURL, reload=reload, normalize=True, base=self._plugin_base)
 
         if moduleFilename:
             try:
-                self.log_plugin_trace("Scanning module for plug-in info: {}".format(moduleFilename), logging.INFO)
+                self._log_plugin_trace("Scanning module for plug-in info: {}".format(moduleFilename), logging.INFO)
                 moduleInfo = self.parse_plugin_info(moduleURL, moduleFilename, entryPoint)
                 if moduleInfo is None:
                     return None
@@ -479,33 +479,20 @@ class PluginContext:
                         _importURL = os.path.join(os.path.dirname(moduleURL), os.path.normpath(_url))
                         if not os.path.exists(_importURL):  # not relative to this plugin, assume standard plugin base
                             _importURL = _url  # module_module_info adjusts relative URL to plugin base
-                    _importModuleInfo = self.module_module_info(moduleURL=_importURL, reload=reload, parentImportsSubtree=_moduleImportsSubtree)
+                    _importModuleInfo = self.generate_module_info(moduleURL=_importURL, reload=reload, parentImportsSubtree=_moduleImportsSubtree)
                     if _importModuleInfo:
                         _importModuleInfo["isImported"] = True
                         imports.append(_importModuleInfo)
                 moduleInfo["imports"] = imports
-                self.log_plugin_trace(f"Successful module plug-in info: {moduleFilename}", logging.INFO)
+                self._log_plugin_trace(f"Successful module plug-in info: {moduleFilename}", logging.INFO)
                 return moduleInfo
             except Exception as err:
                 _msg = _("Exception obtaining plug-in module info: {moduleFilename}\n{error}\n{traceback}").format(
                     error=err, moduleFilename=moduleFilename, traceback=traceback.format_tb(sys.exc_info()[2]))
-                self.log_plugin_trace(_msg, logging.ERROR)
+                self._log_plugin_trace(_msg, logging.ERROR)
         return None
 
-    def module_info(self, pluginInfo):
-        moduleInfo = {}
-        for name, value in pluginInfo.items():
-            if isinstance(value, str):
-                moduleInfo[name] = value
-            elif isinstance(value, types.FunctionType):
-                if 'classes' not in moduleInfo:
-                    classes = []
-                    moduleInfo['classes'] = classes
-                else:
-                    classes = moduleInfo['classes']
-                classes.append(name)
-
-    def load_module(self, moduleInfo: dict[str, Any], packagePrefix: str = "") -> None:
+    def _load_module(self, moduleInfo: dict[str, Any], packagePrefix: str = "") -> None:
         name = moduleInfo['name']
         moduleURL = moduleInfo['moduleURL']
 
@@ -554,16 +541,16 @@ class PluginContext:
                     except Exception as err:
                         _msg = _("Exception loading plug-in {name}: processing ModelObjectFactory.ElementSubstitutionClasses").format(
                             name=name, error=err)
-                        self.log_plugin_trace(_msg, logging.ERROR)
+                        self._log_plugin_trace(_msg, logging.ERROR)
                 for importModuleInfo in moduleInfo.get('imports', []):
-                    self.load_module(importModuleInfo, packageImportPrefix)
+                    self._load_module(importModuleInfo, packageImportPrefix)
             except (AttributeError, ImportError, FileNotFoundError, ModuleNotFoundError, TypeError, SystemError) as err:
                 # Send a summary of the error to the logger and retain the stacktrace for stderr
                 self._controller.addToLog(message=_ERROR_MESSAGE_IMPORT_TEMPLATE.format(name), level=logging.ERROR)
 
                 _msg = _("Exception loading plug-in {name}: {error}\n{traceback}").format(
                     name=name, error=err, traceback=traceback.format_tb(sys.exc_info()[2]))
-                self.log_plugin_trace(_msg, logging.ERROR)
+                self._log_plugin_trace(_msg, logging.ERROR)
 
     def plugin_class_methods(self, className: str) -> Iterator[Callable[..., Any]]:
         if not self._plugin_config:
@@ -581,7 +568,7 @@ class PluginContext:
                         moduleInfo = self._plugin_config["modules"][moduleName]
                         if moduleInfo["status"] == "enabled":
                             if moduleName not in self._module_plugin_infos:
-                                self.load_module(moduleInfo)
+                                self._load_module(moduleInfo)
                             if moduleName in self._module_plugin_infos:
                                 pluginInfo = self._module_plugin_infos[moduleName]
                                 if className in pluginInfo:
@@ -596,19 +583,19 @@ class PluginContext:
         :param name: The name to search for
         :return: The module information dictionary, if added. Otherwise, None.
         """
-        entryPointRef = self._entry_point_factory.get(name)
+        entryPointRef = self._entry_point_ref_factory.get(name)
         pluginModuleInfo = None
         if entryPointRef:
-            pluginModuleInfo = self._entry_point_factory.create_module_info(entryPointRef)
+            pluginModuleInfo = self._entry_point_ref_factory.create_module_info(entryPointRef)
         if not pluginModuleInfo or not pluginModuleInfo.get("name"):
-            pluginModuleInfo = self.module_module_info(moduleURL=name)
-        return self.add_plugin_module_info(pluginModuleInfo)
+            pluginModuleInfo = self.generate_module_info(moduleURL=name)
+        return self._add_plugin_module_info(pluginModuleInfo)
 
     def reload_plugin_module(self, name):
         if name in self._plugin_config["modules"]:
             url = self._plugin_config["modules"][name].get("moduleURL")
             if url:
-                moduleInfo = self.module_module_info(moduleURL=url, reload=True)
+                moduleInfo = self.generate_module_info(moduleURL=url, reload=True)
                 if moduleInfo:
                     self.add_plugin_module(url)
                     return True
@@ -635,7 +622,7 @@ class PluginContext:
             return True
         return False  # unable to remove
 
-    def add_plugin_module_info(self, plugin_module_info: dict[str, Any]) -> dict[str, Any] | None:
+    def _add_plugin_module_info(self, plugin_module_info: dict[str, Any]) -> dict[str, Any] | None:
         """
         Given a dictionary containing module information, loads plugin info into `pluginConfig`
         :param plugin_module_info: Dictionary of module info fields. See comment block in PluginManager.py for structure.

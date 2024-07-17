@@ -7,7 +7,7 @@ from collections.abc import Callable
 from importlib.metadata import EntryPoint
 from typing import TYPE_CHECKING, Any, Iterator
 
-from .PluginContext import PluginContext
+from .services.plugins.PluginContext import PluginContext
 
 if TYPE_CHECKING:
     from .Cntlr import Cntlr
@@ -38,7 +38,7 @@ def moduleModuleInfo(
         parentImportsSubtree: bool = False,
 ) -> dict | None:
     assert _GLOBAL_PLUGIN_CONTEXT is not None
-    return _GLOBAL_PLUGIN_CONTEXT.module_module_info(moduleURL, entryPoint, reload, parentImportsSubtree)
+    return _GLOBAL_PLUGIN_CONTEXT.generate_module_info(moduleURL, entryPoint, reload, parentImportsSubtree)
 
 
 def modulesWithNewerFileDates():
