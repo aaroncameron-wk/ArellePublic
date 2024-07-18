@@ -11,7 +11,6 @@ if TYPE_CHECKING:
     from arelle.Cntlr import Cntlr
 
 
-
 class PluginContext(ABC):
 
     @abstractmethod
@@ -46,19 +45,6 @@ class PluginContext(ABC):
 
     @abstractmethod
     def modules_with_newer_file_dates(self) -> list[str]:
-        pass
-
-    @abstractmethod
-    def normalize_module_filename(self, moduleFilename: str) -> str | None:
-        pass
-
-    @abstractmethod
-    def parse_plugin_info(
-            self,
-            moduleURL: str,
-            moduleFilename: str,
-            entryPoint: EntryPoint | None,
-    ) -> dict[str, Any] | None:
         pass
 
     @abstractmethod

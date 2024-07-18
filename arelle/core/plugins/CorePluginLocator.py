@@ -7,14 +7,14 @@ import os
 import sys
 from collections import defaultdict
 from importlib.metadata import EntryPoint, entry_points
-from typing import cast, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from arelle.services.plugins.EntryPointRef import EntryPointRef
-from arelle.services.plugins.EntryPointRefFactory import EntryPointRefFactory
+from arelle.services.plugins.PluginLocator import PluginLocator
+from arelle.services.plugins.PluginParser import PluginParser
 
 if TYPE_CHECKING:
-    from arelle.services.plugins.PluginContext import PluginContext
-
+    from arelle.Cntlr import Cntlr
 
 _CACHE: list[EntryPointRef] | None = None
 _ALIAS_CACHE: dict[str, list[EntryPointRef]] | None = None
@@ -25,21 +25,21 @@ _SEARCH_TERM_ENDINGS = [
 ]
 
 
-class CoreEntryPointRefFactory(EntryPointRefFactory):
+class CorePluginLocator(PluginLocator):
 
-    def __init__(self, plugin_context: PluginContext):
-        self._plugin_context = plugin_context
+    def __init__(self, controller: Cntlr, plugin_parser: PluginParser):
+        self._controller = controller
+        self._plugin_parser = plugin_parser
 
-    def _discover_all(self) -> list[EntryPointRef]:
+    def _discover_all(self, plugin_base: str) -> list[EntryPointRef]:
         """
         Retrieve all plugin entry points, cached on first run.
         :return: List of all discovered entry points.
         """
         global _CACHE
         if _CACHE is None:
-            assert self._plugin_context.get_plugin_base() is not None
             _CACHE = \
-                self._discover_built_in([], cast(str, self._plugin_context.get_plugin_base())) + \
+                self._discover_built_in([], plugin_base) + \
                 self._discover_installed()
         return _CACHE
 
@@ -95,15 +95,15 @@ class CoreEntryPointRefFactory(EntryPointRefFactory):
         :param entryPoint: Optional entry point information to include in aliases/moduleInfo
         :return:
         """
-        moduleFilename = self._plugin_context.get_controller().webCache.getfilename(filepath)
+        moduleFilename = self._controller.webCache.getfilename(filepath)
         if moduleFilename:
-            moduleFilename = self._plugin_context.normalize_module_filename(moduleFilename)
+            moduleFilename = self.normalize_module_filename(moduleFilename)
         aliases = set()
         if entryPoint:
             aliases.add(entryPoint.name)
         moduleInfo: dict | None = None
         if moduleFilename:
-            moduleInfo = self._plugin_context.parse_plugin_info(moduleFilename, moduleFilename, entryPoint)
+            moduleInfo = self._plugin_parser.parse_plugin_info(moduleFilename, moduleFilename, entryPoint)
             if moduleInfo is None:
                 return None
             if "name" in moduleInfo:
@@ -111,7 +111,7 @@ class CoreEntryPointRefFactory(EntryPointRefFactory):
             if "aliases" in moduleInfo:
                 aliases |= set(moduleInfo["aliases"])
         return EntryPointRef(
-            aliases={CoreEntryPointRefFactory._normalize_plugin_search_term(a) for a in aliases},
+            aliases={CorePluginLocator._normalize_plugin_search_term(a) for a in aliases},
             entryPoint=entryPoint,
             moduleFilename=moduleFilename,
             moduleInfo=moduleInfo,
@@ -128,7 +128,7 @@ class CoreEntryPointRefFactory(EntryPointRefFactory):
         pluginUrl = pluginUrlFunc()
         return self._from_filepath(pluginUrl, entryPoint)
 
-    def _search(self, search: str) -> list[EntryPointRef] | None:
+    def _search(self, plugin_base: str, search: str) -> list[EntryPointRef] | None:
         """
         Retrieve entry point module information matching provided search text.
         A map of aliases to matching entry points is cached on the first run.
@@ -138,13 +138,40 @@ class CoreEntryPointRefFactory(EntryPointRefFactory):
         global _ALIAS_CACHE
         if _ALIAS_CACHE is None:
             entryPointRefAliasCache = defaultdict(list)
-            entryPointRefs = self._discover_all()
+            entryPointRefs = self._discover_all(plugin_base)
             for entryPointRef in entryPointRefs:
                 for alias in entryPointRef.aliases:
                     entryPointRefAliasCache[alias].append(entryPointRef)
             _ALIAS_CACHE = entryPointRefAliasCache
-        search = CoreEntryPointRefFactory._normalize_plugin_search_term(search)
+        search = CorePluginLocator._normalize_plugin_search_term(search)
         return _ALIAS_CACHE.get(search, [])
+
+    def normalize_module_filename(self, moduleFilename: str) -> str | None:
+        """
+        Attempts to find python script as plugin entry point.
+        A value will be returned
+          if `moduleFilename` exists as-is,
+          if `moduleFilename` is a directory containing __init__.py, or
+          if `moduleFilename` with .py extension added exists
+        :param moduleFilename:
+        :return: Normalized filename, if exists
+        """
+        if os.path.isfile(moduleFilename):
+            # moduleFilename exists as-is, use it
+            return moduleFilename
+        if os.path.isdir(moduleFilename):
+            # moduleFilename is a directory, only valid script is __init__.py contained inside
+            initPath = os.path.join(moduleFilename, "__init__.py")
+            if os.path.isfile(initPath):
+                return initPath
+            else:
+                return None
+        if not moduleFilename.endswith(".py"):
+            # moduleFilename is not a file or directory, try adding .py
+            pyPath = moduleFilename + ".py"
+            if os.path.exists(pyPath):
+                return pyPath
+        return None
 
     @staticmethod
     def _normalize_plugin_search_term(search: str) -> str:
@@ -163,16 +190,7 @@ class CoreEntryPointRefFactory(EntryPointRefFactory):
                     break
             return search.lower()
 
-    def create_module_info(self, entry_point_ref: EntryPointRef | None, filename: str | None = None) -> dict | None:
-        """
-        Creates a module information dictionary from the entry point ref.
-        :return: A module inforomation dictionary
-        """
-        if entry_point_ref is not None:
-            return self._plugin_context.generate_module_info(entryPoint=entry_point_ref.entryPoint)
-        return self._plugin_context.generate_module_info(moduleURL=filename)
-
-    def get(self, search: str) -> EntryPointRef | None:
+    def get(self, plugin_base: str, search: str) -> EntryPointRef | None:
         """
         Retrieve an entry point ref with a matching name or alias.
         May return None of no matches are found.
@@ -180,7 +198,7 @@ class CoreEntryPointRefFactory(EntryPointRefFactory):
         :param search: Only retrieve entry point matching the given search text.
         :return: Matching entry point ref, if found.
         """
-        entryPointRefs = self._search(search)
+        entryPointRefs = self._search(plugin_base, search)
         if len(entryPointRefs) == 0:
             return None
         elif len(entryPointRefs) > 1:

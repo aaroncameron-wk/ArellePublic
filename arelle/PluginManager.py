@@ -25,9 +25,12 @@ def close():  # close all loaded methods
 
 def init(cntlr: Cntlr, loadPluginConfig: bool = True) -> None:
     global _GLOBAL_PLUGIN_CONTEXT
-    if _GLOBAL_PLUGIN_CONTEXT is None:
-        from .core.plugins.CorePluginContext import CorePluginContext
-        _GLOBAL_PLUGIN_CONTEXT = CorePluginContext(cntlr)
+    from .core.plugins.CorePluginContext import CorePluginContext
+    from .core.plugins.CorePluginLocator import CorePluginLocator
+    from .core.plugins.CorePluginParser import CorePluginParser
+    plugin_parser = CorePluginParser(cntlr)
+    plugin_locator = CorePluginLocator(cntlr, plugin_parser)
+    _GLOBAL_PLUGIN_CONTEXT = CorePluginContext(cntlr, plugin_locator, plugin_parser)
     _GLOBAL_PLUGIN_CONTEXT.init(loadPluginConfig)
 
 
@@ -70,3 +73,7 @@ def reset() -> None:  # force reloading modules and plugin infos
 def save(cntlr: Cntlr) -> None:
     assert _GLOBAL_PLUGIN_CONTEXT is not None
     return _GLOBAL_PLUGIN_CONTEXT.save(cntlr)
+
+
+def getContext():
+    return _GLOBAL_PLUGIN_CONTEXT

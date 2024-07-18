@@ -3,7 +3,6 @@ See COPYRIGHT.md for copyright information.
 """
 from __future__ import annotations
 
-import ast
 import gettext
 import importlib
 import importlib.util
@@ -15,16 +14,17 @@ import sys
 import time
 import traceback
 import types
-from collections import OrderedDict, defaultdict
+from collections import OrderedDict
 from importlib.metadata import EntryPoint
 from pathlib import Path
 from typing import Any, Iterator, Callable, TYPE_CHECKING
 
-from arelle import FileSource
 from arelle.Locale import getLanguageCodes
 from arelle.UrlUtil import isAbsolute
-from arelle.core.plugins.CoreEntryPointRefFactory import CoreEntryPointRefFactory
+from arelle.services.plugins import PluginParser
+from arelle.services.plugins.EntryPointRef import EntryPointRef
 from arelle.services.plugins.PluginContext import PluginContext
+from arelle.services.plugins.PluginLocator import PluginLocator
 
 if TYPE_CHECKING:
     from arelle.Cntlr import Cntlr
@@ -101,8 +101,10 @@ def _find_and_load_module(moduleDir: str, moduleName: str) -> types.ModuleType |
 
 
 class CorePluginContext(PluginContext):
-    def __init__(self, cntlr):
+    def __init__(self, cntlr: Cntlr, plugin_locator: PluginLocator, plugin_parser: PluginParser):
         self._controller = cntlr
+        self._plugin_locator = plugin_locator
+        self._plugin_parser = plugin_parser
         self._json_file = None
         self._plugin_config = None
         self._plugin_config_changed = False
@@ -110,8 +112,15 @@ class CorePluginContext(PluginContext):
         self._module_plugin_infos = {}
         self._methods = {}
         self._plugin_base = None
-        # TODO: This dependency should be passed to the constructor
-        self._entry_point_ref_factory = CoreEntryPointRefFactory(self)
+
+    def _create_module_info(self, entry_point_ref: EntryPointRef | None, filename: str | None = None) -> dict | None:
+        """
+        Creates a module information dictionary from the entry point ref.
+        :return: A module inforomation dictionary
+        """
+        if entry_point_ref is not None:
+            return self.generate_module_info(entryPoint=entry_point_ref.entryPoint)
+        return self.generate_module_info(moduleURL=filename)
 
     def init(self, loadPluginConfig: bool = True) -> None:
         if PLUGIN_TRACE_FILE:
@@ -273,143 +282,21 @@ class CorePluginContext(PluginContext):
     def get_plugin_base(self):
         return self._plugin_base
 
-    def normalize_module_filename(self, moduleFilename: str) -> str | None:
-        """
-        Attempts to find python script as plugin entry point.
-        A value will be returned
-          if `moduleFilename` exists as-is,
-          if `moduleFilename` is a directory containing __init__.py, or
-          if `moduleFilename` with .py extension added exists
-        :param moduleFilename:
-        :return: Normalized filename, if exists
-        """
-        if os.path.isfile(moduleFilename):
-            # moduleFilename exists as-is, use it
-            return moduleFilename
-        if os.path.isdir(moduleFilename):
-            # moduleFilename is a directory, only valid script is __init__.py contained inside
-            initPath = os.path.join(moduleFilename, "__init__.py")
-            if os.path.isfile(initPath):
-                return initPath
-            else:
-                return None
-        if not moduleFilename.endswith(".py"):
-            # moduleFilename is not a file or directory, try adding .py
-            pyPath = moduleFilename + ".py"
-            if os.path.exists(pyPath):
-                return pyPath
-        return None
-
     def _get_module_filename(self, moduleURL: str, reload: bool, normalize: bool, base: str | None) -> tuple[str | None, EntryPoint | None]:
         # TODO several directories, eg User Application Data
         moduleFilename = self._controller.webCache.getfilename(moduleURL, reload=reload, normalize=normalize, base=base)
         if moduleFilename:
             # `moduleURL` was mapped to a local filepath
-            moduleFilename = self.normalize_module_filename(moduleFilename)
+            moduleFilename = self._plugin_locator.normalize_module_filename(moduleFilename)
             if moduleFilename:
                 # `moduleFilename` normalized to an existing script
                 return moduleFilename, None
         # `moduleFilename` did not map to a local filepath or did not normalize to a script
         # Try using `moduleURL` to search for pip-installed entry point
-        entryPointRef = self._entry_point_ref_factory.get(moduleURL)
+        entryPointRef = self._plugin_locator.get(self._plugin_base, moduleURL)
         if entryPointRef is not None:
             return entryPointRef.moduleFilename, entryPointRef.entryPoint
         return None, None
-
-    def parse_plugin_info(self, moduleURL: str, moduleFilename: str, entryPoint: EntryPoint | None) -> dict | None:
-        moduleDir, moduleName = os.path.split(moduleFilename)
-        f = FileSource.openFileStream(self._controller, moduleFilename)
-        tree = ast.parse(f.read(), filename=moduleFilename)
-        constantStrings = {}
-        functionDefNames = set()
-        methodDefNamesByClass = defaultdict(set)
-        moduleImports = []
-        moduleInfo = {"name": None}
-        isPlugin = False
-        for item in tree.body:
-            if isinstance(item, ast.Assign):
-                attr = item.targets[0].id
-                if attr == "__pluginInfo__":
-                    isPlugin = True
-                    f.close()
-                    classMethods = []
-                    importURLs = []
-                    for i, key in enumerate(item.value.keys):
-                        _key = key.value
-                        _value = item.value.values[i]
-                        _valueType = _value.__class__.__name__
-                        if _key == "import":
-                            if _valueType == 'Constant':
-                                importURLs.append(_value.value)
-                            elif _valueType in ("List", "Tuple"):
-                                for elt in _value.elts:
-                                    importURLs.append(elt.value)
-                        elif _valueType == 'Constant':
-                            moduleInfo[_key] = _value.value
-                        elif _valueType == 'Name':
-                            if _value.id in constantStrings:
-                                moduleInfo[_key] = constantStrings[_value.id]
-                            elif _value.id in functionDefNames:
-                                classMethods.append(_key)
-                        elif _valueType == 'Attribute':
-                            if _value.attr in methodDefNamesByClass[_value.value.id]:
-                                classMethods.append(_key)
-                        elif _valueType in ("List", "Tuple"):
-                            values = [elt.value for elt in _value.elts]
-                            if _key == "imports":
-                                importURLs = values
-                            else:
-                                moduleInfo[_key] = values
-
-                    moduleInfo['classMethods'] = classMethods
-                    moduleInfo['importURLs'] = importURLs
-                    moduleInfo["moduleURL"] = moduleURL
-                    moduleInfo["path"] = moduleFilename
-                    moduleInfo["status"] = 'enabled'
-                    moduleInfo["fileDate"] = time.strftime('%Y-%m-%dT%H:%M:%S UTC', time.gmtime(os.path.getmtime(moduleFilename)))
-                    if entryPoint:
-                        moduleInfo["moduleURL"] = moduleFilename  # pip-installed plugins need absolute filepath
-                        moduleInfo["entryPoint"] = {
-                            "module": getattr(entryPoint, 'module', None),  # TODO: Simplify after Python 3.8 retired
-                            "name": entryPoint.name,
-                            "version": entryPoint.dist.version if hasattr(entryPoint, 'dist') else None,
-                        }
-                        if not moduleInfo.get("version"):
-                            moduleInfo["version"] = entryPoint.dist.version  # If no explicit version, retrieve from entry point
-                elif isinstance(item.value, ast.Constant) and isinstance(item.value.value, str):  # possible constant used in plugininfo, such as VERSION
-                    for assignmentName in item.targets:
-                        constantStrings[assignmentName.id] = item.value.value
-            elif isinstance(item, ast.ImportFrom):
-                if item.level == 1:  # starts with .
-                    if item.module is None:  # from . import module1, module2, ...
-                        for importee in item.names:
-                            if importee.name == '*':  # import all submodules
-                                for _file in os.listdir(moduleDir):
-                                    if _file != moduleName and os.path.isfile(_file) and _file.endswith(".py"):
-                                        moduleImports.append(_file)
-                            elif (os.path.isfile(os.path.join(moduleDir, importee.name + ".py"))
-                                  and importee.name not in moduleImports):
-                                moduleImports.append(importee.name)
-                    else:
-                        modulePkgs = item.module.split('.')
-                        modulePath = os.path.join(*modulePkgs)
-                        if (os.path.isfile(os.path.join(moduleDir, modulePath) + ".py")
-                                and modulePath not in moduleImports):
-                            moduleImports.append(modulePath)
-                        for importee in item.names:
-                            _importeePfxName = os.path.join(modulePath, importee.name)
-                            if (os.path.isfile(os.path.join(moduleDir, _importeePfxName) + ".py")
-                                    and _importeePfxName not in moduleImports):
-                                moduleImports.append(_importeePfxName)
-            elif isinstance(item, ast.FunctionDef):  # possible functionDef used in plugininfo
-                functionDefNames.add(item.name)
-            elif isinstance(item, ast.ClassDef):  # possible ClassDef used in plugininfo
-                for classItem in item.body:
-                    if isinstance(classItem, ast.FunctionDef):
-                        methodDefNamesByClass[item.name].add(classItem.name)
-        moduleInfo["moduleImports"] = moduleImports
-        f.close()
-        return moduleInfo if isPlugin else None
 
     def generate_module_info(self, moduleURL: str | None = None, entryPoint: EntryPoint | None = None, reload: bool = False, parentImportsSubtree: bool = False) -> dict | None:
         """
@@ -442,7 +329,7 @@ class CorePluginContext(PluginContext):
         if moduleFilename:
             try:
                 self._log_plugin_trace("Scanning module for plug-in info: {}".format(moduleFilename), logging.INFO)
-                moduleInfo = self.parse_plugin_info(moduleURL, moduleFilename, entryPoint)
+                moduleInfo = self._plugin_parser.parse_plugin_info(moduleURL, moduleFilename, entryPoint)
                 if moduleInfo is None:
                     return None
 
@@ -583,13 +470,39 @@ class CorePluginContext(PluginContext):
         :param name: The name to search for
         :return: The module information dictionary, if added. Otherwise, None.
         """
-        entryPointRef = self._entry_point_ref_factory.get(name)
-        pluginModuleInfo = None
+        entryPointRef = self._plugin_locator.get(self._plugin_base, name)
+        plugin_module_info = None
         if entryPointRef:
-            pluginModuleInfo = self._entry_point_ref_factory.create_module_info(entryPointRef)
-        if not pluginModuleInfo or not pluginModuleInfo.get("name"):
-            pluginModuleInfo = self.generate_module_info(moduleURL=name)
-        return self._add_plugin_module_info(pluginModuleInfo)
+            plugin_module_info = self._create_module_info(entryPointRef)
+        if not plugin_module_info or not plugin_module_info.get("name"):
+            plugin_module_info = self.generate_module_info(moduleURL=name)
+        if not plugin_module_info or not plugin_module_info.get("name"):
+            return None
+        name = plugin_module_info["name"]
+        self.remove_plugin_module(name)  # remove any prior entry for this module
+
+        def _addPluginSubModule(subModuleInfo: dict[str, Any]):
+            """
+            Inline function for recursively exploring module imports
+            :param subModuleInfo: Module information to add.
+            :return:
+            """
+            _name = subModuleInfo.get("name")
+            if not _name:
+                return
+            # add classes
+            for classMethod in subModuleInfo["classMethods"]:
+                classMethods = self._plugin_config["classes"].setdefault(classMethod, [])
+                _name = subModuleInfo["name"]
+                if _name and _name not in classMethods:
+                    classMethods.append(_name)
+            for importModuleInfo in subModuleInfo.get('imports', []):
+                _addPluginSubModule(importModuleInfo)
+            self._plugin_config["modules"][_name] = subModuleInfo
+
+        _addPluginSubModule(plugin_module_info)
+        self._plugin_config_changed = True
+        return plugin_module_info
 
     def reload_plugin_module(self, name):
         if name in self._plugin_config["modules"]:
@@ -628,30 +541,3 @@ class CorePluginContext(PluginContext):
         :param plugin_module_info: Dictionary of module info fields. See comment block in PluginManager.py for structure.
         :return: The module information dictionary, if added. Otherwise, None.
         """
-        if not plugin_module_info or not plugin_module_info.get("name"):
-            return None
-        name = plugin_module_info["name"]
-        self.remove_plugin_module(name)  # remove any prior entry for this module
-
-        def _addPluginSubModule(subModuleInfo: dict[str, Any]):
-            """
-            Inline function for recursively exploring module imports
-            :param subModuleInfo: Module information to add.
-            :return:
-            """
-            _name = subModuleInfo.get("name")
-            if not _name:
-                return
-            # add classes
-            for classMethod in subModuleInfo["classMethods"]:
-                classMethods = self._plugin_config["classes"].setdefault(classMethod, [])
-                _name = subModuleInfo["name"]
-                if _name and _name not in classMethods:
-                    classMethods.append(_name)
-            for importModuleInfo in subModuleInfo.get('imports', []):
-                _addPluginSubModule(importModuleInfo)
-            self._plugin_config["modules"][_name] = subModuleInfo
-
-        _addPluginSubModule(plugin_module_info)
-        self._plugin_config_changed = True
-        return plugin_module_info
