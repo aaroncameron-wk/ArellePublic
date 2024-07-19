@@ -119,7 +119,9 @@ class CorePluginContext(PluginContext):
         :return: A module inforomation dictionary
         """
         if entry_point_ref is not None:
-            return self.generate_module_info(entryPoint=entry_point_ref.entryPoint)
+            if entry_point_ref.entryPoint is not None:
+                return self.generate_module_info(entryPoint=entry_point_ref.entryPoint)
+            return self.generate_module_info(moduleURL=entry_point_ref.moduleFilename)
         return self.generate_module_info(moduleURL=filename)
 
     def init(self, loadPluginConfig: bool = True) -> None:
