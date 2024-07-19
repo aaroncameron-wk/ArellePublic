@@ -105,6 +105,7 @@ def run_arelle(
         arelle_command, plugins, additional_args,
         offline, logFile, logFormat
     )
+    print("Running CLI: \n" + " ".join((a if " " not in a else f'"{a}"') for a in args))
     result = subprocess.run(args, capture_output=True)
     assert result.returncode == 0, result.stderr.decode().strip()
 

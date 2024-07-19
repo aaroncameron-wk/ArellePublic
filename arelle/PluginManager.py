@@ -28,10 +28,14 @@ def init(cntlr: Cntlr, loadPluginConfig: bool = True) -> None:
     from .core.plugins.CorePluginContext import CorePluginContext
     from .core.plugins.CorePluginLocator import CorePluginLocator
     from .core.plugins.CorePluginParser import CorePluginParser
-    plugin_parser = CorePluginParser(cntlr)
-    plugin_locator = CorePluginLocator(cntlr, plugin_parser)
-    _GLOBAL_PLUGIN_CONTEXT = CorePluginContext(cntlr, plugin_locator, plugin_parser)
+    if _GLOBAL_PLUGIN_CONTEXT is None:
+        plugin_parser = CorePluginParser(cntlr)
+        plugin_locator = CorePluginLocator(cntlr, plugin_parser)
+        _GLOBAL_PLUGIN_CONTEXT = CorePluginContext(cntlr, plugin_locator, plugin_parser)
     _GLOBAL_PLUGIN_CONTEXT.init(loadPluginConfig)
+    _GLOBAL_PLUGIN_CONTEXT._controller = cntlr
+    _GLOBAL_PLUGIN_CONTEXT._plugin_parser._controller = cntlr
+    _GLOBAL_PLUGIN_CONTEXT._plugin_locator._controller = cntlr
 
 
 def moduleModuleInfo(
@@ -77,3 +81,14 @@ def save(cntlr: Cntlr) -> None:
 
 def getContext():
     return _GLOBAL_PLUGIN_CONTEXT
+
+
+def getPluginConfig():
+    assert _GLOBAL_PLUGIN_CONTEXT is not None
+    return _GLOBAL_PLUGIN_CONTEXT._plugin_config
+
+
+def setPluginConfig(pluginConfig):
+    assert _GLOBAL_PLUGIN_CONTEXT is not None
+    _GLOBAL_PLUGIN_CONTEXT._plugin_config = pluginConfig
+    _GLOBAL_PLUGIN_CONTEXT._plugin_config_changed = True

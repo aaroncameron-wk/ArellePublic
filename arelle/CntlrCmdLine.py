@@ -763,7 +763,7 @@ class CntlrCmdLine(Cntlr.Cntlr):
 
             if showPluginModules:
                 self.addToLog(_("Plug-in modules:"), messageCode="info")
-                for i, moduleItem in enumerate(sorted(PluginManager.pluginConfig.get("modules", {}).items())):
+                for i, moduleItem in enumerate(sorted(PluginManager.getPluginConfig().get("modules", {}).items())):
                     moduleInfo = moduleItem[1]
                     self.addToLog(_("Plug-in: {0}; author: {1}; version: {2}; status: {3}; date: {4}; description: {5}; license {6}.").format(
                                   moduleItem[0], moduleInfo.get("author"), moduleInfo.get("version"), moduleInfo.get("status"),

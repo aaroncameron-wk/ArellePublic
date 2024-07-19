@@ -50,7 +50,7 @@ class DialogPluginManager(Toplevel):
         self.cntlr = mainWin
 
         # copy plugins for temporary display
-        self.pluginConfig = PluginManager.pluginConfig
+        self.pluginConfig = PluginManager.getPluginConfig()
         self.pluginConfigChanged = False
         self.uiClassMethodsChanged = False
         self.modelClassesChanged = False
@@ -282,8 +282,7 @@ class DialogPluginManager(Toplevel):
             del self.pluginConfig["classes"][_orphanedClassName]
 
         if self.pluginConfigChanged:
-            PluginManager.pluginConfig = self.pluginConfig
-            PluginManager.pluginConfigChanged = True
+            PluginManager.setPluginConfig(self.pluginConfig)
             PluginManager.reset()  # force reloading of modules
         if self.uiClassMethodsChanged or self.modelClassesChanged or self.customTransformsChanged or self.disclosureSystemTypesChanged or self.hostSystemFeaturesChanged:  # may require reloading UI
             affectedItems = ""
