@@ -6,11 +6,10 @@ based on pull request 4
 '''
 from __future__ import annotations
 
-from importlib.metadata import EntryPoint
 from tkinter import Toplevel, font, messagebox, VERTICAL, HORIZONTAL, N, S, E, W
 from tkinter.constants import DISABLED, ACTIVE
 
-from arelle.PluginManager import EntryPointRef
+from arelle.services.plugins.EntryPointRef import EntryPointRef
 
 try:
     from tkinter.ttk import Treeview, Scrollbar, Frame, Label, Button
@@ -51,7 +50,7 @@ class DialogPluginManager(Toplevel):
         self.cntlr = mainWin
 
         # copy plugins for temporary display
-        self.pluginConfig = PluginManager.pluginConfig
+        self.pluginConfig = PluginManager.getPluginConfig()
         self.pluginConfigChanged = False
         self.uiClassMethodsChanged = False
         self.modelClassesChanged = False
@@ -283,8 +282,7 @@ class DialogPluginManager(Toplevel):
             del self.pluginConfig["classes"][_orphanedClassName]
 
         if self.pluginConfigChanged:
-            PluginManager.pluginConfig = self.pluginConfig
-            PluginManager.pluginConfigChanged = True
+            PluginManager.setPluginConfig(self.pluginConfig)
             PluginManager.reset()  # force reloading of modules
         if self.uiClassMethodsChanged or self.modelClassesChanged or self.customTransformsChanged or self.disclosureSystemTypesChanged or self.hostSystemFeaturesChanged:  # may require reloading UI
             affectedItems = ""

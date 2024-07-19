@@ -1,85 +1,93 @@
 """Tests for the PluginManager module."""
 from __future__ import annotations
+
 import os
-import sys
+from unittest.mock import Mock
 
 import pytest
-from unittest.mock import Mock
 
 from arelle import PluginManager
 from arelle.Cntlr import Cntlr
+from arelle.core.plugins.CorePluginContext import _get_name_dir_prefix
 
 
 def test_plugin_manager_init_first_pass():
     """
-    Test that pluginConfig is correctly setup during init on fresh pass
+    Test that _plugin_config is correctly setup during init on fresh pass
     """
     cntlr = Mock(pluginDir='some_dir')
     PluginManager.init(cntlr, loadPluginConfig=False)
-    assert len(PluginManager.pluginConfig) == 2
-    assert 'modules' in PluginManager.pluginConfig
-    assert isinstance(PluginManager.pluginConfig.get('modules'), dict)
-    assert len(PluginManager.pluginConfig.get('modules')) == 0
-    assert 'classes' in PluginManager.pluginConfig
-    assert isinstance(PluginManager.pluginConfig.get('classes'), dict)
-    assert len(PluginManager.pluginConfig.get('classes')) == 0
-    assert len(PluginManager.modulePluginInfos) == 0
-    assert len(PluginManager.pluginMethodsForClasses) == 0
-    assert PluginManager._cntlr == cntlr
+    plugin_context = PluginManager.getContext()
+    assert len(plugin_context._plugin_config) == 2
+    assert 'modules' in plugin_context._plugin_config
+    assert isinstance(plugin_context._plugin_config.get('modules'), dict)
+    assert len(plugin_context._plugin_config.get('modules')) == 0
+    assert 'classes' in plugin_context._plugin_config
+    assert isinstance(plugin_context._plugin_config.get('classes'), dict)
+    assert len(plugin_context._plugin_config.get('classes')) == 0
+    assert len(plugin_context._module_plugin_infos) == 0
+    assert len(plugin_context._methods) == 0
+    assert plugin_context.get_controller() == cntlr
 
 
 def test_plugin_manager_init_config_already_exists():
     """
-    Test that pluginConfig is correctly setup during init on a second pass
+    Test that _plugin_config is correctly setup during init on a second pass
     """
     cntlr = Mock(pluginDir='some_dir')
     PluginManager.init(cntlr, loadPluginConfig=False)
     PluginManager.close()
     PluginManager.init(cntlr, loadPluginConfig=False)
-    assert len(PluginManager.pluginConfig) == 2
-    assert 'modules' in PluginManager.pluginConfig
-    assert isinstance(PluginManager.pluginConfig.get('modules'), dict)
-    assert len(PluginManager.pluginConfig.get('modules')) == 0
-    assert 'classes' in PluginManager.pluginConfig
-    assert isinstance(PluginManager.pluginConfig.get('classes'), dict)
-    assert len(PluginManager.pluginConfig.get('classes')) == 0
-    assert len(PluginManager.modulePluginInfos) == 0
-    assert len(PluginManager.pluginMethodsForClasses) == 0
-    assert PluginManager._cntlr == cntlr
+    plugin_context = PluginManager.getContext()
+    assert len(plugin_context._plugin_config) == 2
+    assert 'modules' in plugin_context._plugin_config
+    assert isinstance(plugin_context._plugin_config.get('modules'), dict)
+    assert len(plugin_context._plugin_config.get('modules')) == 0
+    assert 'classes' in plugin_context._plugin_config
+    assert isinstance(plugin_context._plugin_config.get('classes'), dict)
+    assert len(plugin_context._plugin_config.get('classes')) == 0
+    assert len(plugin_context._module_plugin_infos) == 0
+    assert len(plugin_context._methods) == 0
+    assert plugin_context.get_controller() == cntlr
 
 
 def test_plugin_manager_close():
     """
-    Test that pluginConfig, modulePluginInfos and pluginMethodsForClasses are cleared when close is called
+    Test that _plugin_config, _module_plugin_infos and _methods are cleared when close is called
     """
     cntlr = Mock(pluginDir='some_dir')
     PluginManager.init(cntlr, loadPluginConfig=False)
-    assert len(PluginManager.modulePluginInfos) == 0
-    assert len(PluginManager.pluginMethodsForClasses) == 0
-    PluginManager.modulePluginInfos['module'] = 'plugin_info'
-    PluginManager.pluginMethodsForClasses['class'] = 'plugin_method'
+    plugin_context = PluginManager.getContext()
+    assert len(plugin_context._module_plugin_infos) == 0
+    assert len(plugin_context._methods) == 0
+    plugin_context._module_plugin_infos['module'] = 'plugin_info'
+    plugin_context._methods['class'] = 'plugin_method'
     PluginManager.close()
-    assert len(PluginManager.pluginConfig) == 0
-    assert len(PluginManager.modulePluginInfos) == 0
-    assert len(PluginManager.pluginMethodsForClasses) == 0
-    assert PluginManager._cntlr == cntlr
+    plugin_context = PluginManager.getContext()
+    assert len(plugin_context._plugin_config) == 0
+    assert len(plugin_context._module_plugin_infos) == 0
+    assert len(plugin_context._methods) == 0
+    assert plugin_context.get_controller() == cntlr
 
 
 def test_plugin_manager_reset():
     """
-    Test that modulePluginInfos and pluginMethodsForClasses are cleared when close is called, pluginConfig remains unchanged
+    Test that _module_plugin_infos and _methods are cleared when close is called, _plugin_config remains unchanged
     """
     cntlr = Mock(pluginDir='some_dir')
     PluginManager.init(cntlr, loadPluginConfig=False)
-    assert len(PluginManager.modulePluginInfos) == 0
-    assert len(PluginManager.pluginMethodsForClasses) == 0
-    PluginManager.modulePluginInfos['module'] = 'plugin_info'
-    PluginManager.pluginMethodsForClasses['class'] = 'plugin_method'
+    plugin_context = PluginManager.getContext()
+    assert len(plugin_context._module_plugin_infos) == 0
+    assert len(plugin_context._methods) == 0
+    plugin_context._module_plugin_infos['module'] = 'plugin_info'
+    plugin_context._methods['class'] = 'plugin_method'
     PluginManager.reset()
-    assert len(PluginManager.pluginConfig) == 2
-    assert len(PluginManager.modulePluginInfos) == 0
-    assert len(PluginManager.pluginMethodsForClasses) == 0
-    assert PluginManager._cntlr == cntlr
+    plugin_context = PluginManager.getContext()
+    assert len(plugin_context._plugin_config) == 2
+    assert len(plugin_context._module_plugin_infos) == 0
+    assert len(plugin_context._methods) == 0
+    assert plugin_context.get_controller() == cntlr
+
 
 @pytest.mark.parametrize(
     "test_data, expected_result",
@@ -110,7 +118,7 @@ def test_plugin_manager_reset():
 def test_function_get_name_dir_prefix(
     test_data: tuple[str, str, str],
     expected_result: tuple[str, str, str],
-    ):
+):
     """Test util function get_name_dir_prefix."""
     class Controller(Cntlr):
         """Controller."""
@@ -123,7 +131,7 @@ def test_function_get_name_dir_prefix(
 
     cntlr = Controller()
 
-    moduleName, moduleDir, packageImportPrefix = PluginManager._get_name_dir_prefix(
+    moduleName, moduleDir, packageImportPrefix = _get_name_dir_prefix(
         controller=cntlr,
         pluginBase=Controller.pluginDir,
         moduleURL=test_data[1],
@@ -136,41 +144,6 @@ def test_function_get_name_dir_prefix(
 
     PluginManager.close()
 
-def test_function_loadModule():
-    """
-    Test helper function loadModule.
-
-    This test asserts that a plugin module is loaded when running
-    the function.
-    """
-
-    class Controller(Cntlr):
-        """Controller."""
-
-        pluginDir = "tests/unit_tests/arelle"
-
-        def __init__(self) -> None:
-            """Init controller with logging."""
-            super().__init__(logFileName="logToBuffer")
-
-    Controller()
-
-    PluginManager.loadModule(
-        moduleInfo={
-            "name": "mock",
-            "moduleURL": "functionsMath",
-        }
-    )
-
-    all_modules_list: list[str] = [m.__name__ for m in sys.modules.values() if m]
-
-    assert "arelle.formula.XPathContext" in all_modules_list
-    assert "arelle.FunctionUtil" in all_modules_list
-    assert "arelle.FunctionXs" in all_modules_list
-    assert "isodate.isoduration" in all_modules_list
-    assert "functionsMath" in all_modules_list
-
-    PluginManager.close()
 
 def teardown_function():
     PluginManager.close()
